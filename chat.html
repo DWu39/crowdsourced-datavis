@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="d3.v3.min.js"></script>
+</head>
+<body>
+    <!-- The SVG element will go in here -->
+    <div id="canvas"></div>
+
+    <script>
+        // load data into dataset variable. ASYNC
+        // Displaying chat history
+        var dataset;
+        d3.csv('communication.csv', function(data) {
+            dataset = data;
+            console.log(dataset);
+
+            d3.select('body')
+              .selectAll('p').data(dataset).enter()
+              .append('p')
+              .text(function(d) {
+                var time = d['curr'];
+                var roomId = d['roomId'];
+                var message = JSON.parse(d['message']);
+
+                if (message['type'] === 'comment') {
+                    var comment = message['comment'];
+                    return '[' + roomId + '][' + time + ']' + comment['userId'] + ': ' + comment['text'];
+                }
+              });
+        });
+    </script>
+</body>
+</html>
