@@ -4,7 +4,13 @@
     <meta charset="utf-8">
     <script src="d3.v3.min.js"></script>
     <style>
+        rect.highlight {
+            fill: blue;
+        }
 
+        #canvas {
+            overflow: auto;
+        }
     </style>
 </head>
 <body>
@@ -13,10 +19,16 @@
 
     <script>
         // ------------- GLOBAL PARAMETERS ------------- //
-        var BUFFER_SIZE = 5; // number of messages to display per interval
+        var buffer_size = 5; // number of messages to display per interval
         var padding = 30,
-            width = 960,
-            height = 800;
+            width = 720,
+            height = 800,
+            totalBarHeight = 0;
+
+        var barWidth = 30,
+            barSpacing = 48;
+
+        var offset = 150; // to provide space for names
 
 
         // ------------- GLOBAL DATA ------------- //
@@ -27,7 +39,7 @@
                           .append('svg')
                           .attr('width', width).attr('height', height);
 
-        var users = {} // [userID] -> array of messages
+        var users = {} // index of messages: [userId] -> array of messages
 
 
         // ------------- GRAPH PARAMETERS ------------- //
@@ -40,16 +52,18 @@
 
         var xAxis = d3.svg.axis().orient('bottom').scale(xScale);
 
-        plot.append("g")
-                 .attr("class", "x-axis")
-                 .attr("transform", "translate(0," + (height - padding) + ")")
-                 .call(xAxis);
+        var color = d3.scale.category20(); // color picker
+
+        // plot.append("g")
+        //          .attr("class", "x-axis")
+        //          .attr("transform", "translate(0," + (height - padding) + ")")
+        //          .call(xAxis);
 
 
         // ------------- LOAD DATA ------------- //
         d3.csv('communication.csv', function(data) {
 
-            data = data.splice(0, 140); // TESTING
+            // data = data.splice(0, 140);
 
             // filter for only messages
             dataset = data.filter(function(d) {
@@ -67,7 +81,20 @@
             // ------------- STREAM MESSAGES ------------- //
             var stream = setInterval(function() {
 
-                var nextBatch = dataset.slice(0, BUFFER_SIZE);
+                var nextBatch = dataset.slice(0, Math.floor(buffer_size*Math.random()) + 1);
+
+                // add new messages to index
+                nextBatch.forEach(function(d) {
+                    if (users[d['userId']]) {
+                        users[d['userId']]['messages'].push(d['message']['comment']['text']);
+                    // new user must give a color too
+                    } else {
+                        users[d['userId']] = {
+                            color: color(Math.random()),
+                            messages: [d['message']['comment']['text']]
+                        }
+                    }
+                })
 
                 // check if we need to rescale
                 var maxInNextBatch = d3.max(nextBatch, function(d) {
@@ -85,24 +112,69 @@
                 }
 
                 model = model.concat(nextBatch);
-                dataset = dataset.slice(BUFFER_SIZE);
+                dataset = dataset.slice(nextBatch.length);
+
+                // expand height of svg to account for new elements
+                totalBarHeight += nextBatch.length*(barSpacing);
+                if (totalBarHeight > height) {
+                    plot.attr('height', totalBarHeight);
+                }
 
                 // join new data
                 var rects = plot.selectAll('rect').data(model);
 
-                // update old data
-                rects.style('fill', 'red');
+                // TODO: update old data
+                // rects.style('fill', 'red');
 
+                // TODO: combine rect and text into a g?
                 // append new messages to plot
-                plot.selectAll('rect').data(model).enter()
+                rects.enter()
                     .append('rect')
-                    .attr('x', xScale(0))
-                    .attr('y', function(d, i) { return i*25; })
-                    .attr('height', 15)
+                    .style('fill', 'grey')
+                    .attr('x', offset + xScale(0))
+                    .attr('y', function(d, i) { return i*barSpacing; })
+                    .attr('height', barWidth)
                     .attr('width', function(d) {
                         // TODO: Why is this going all the way to the end?
                         return xScale(d['message']['comment']['text'].length);
                     })
+                    // .attr('data-user', function(d) { return d['userId']; })
+                    .attr('fill-opacity', 0)
+                    .transition().duration(1000).attr('fill-opacity', 1);
+
+                // include userIds with messages
+                plot.selectAll('text').data(model).enter()
+                    .append('text')
+                    .text(function(d) { return d['userId'] })
+                    .attr('x', padding)
+                    .attr('y', function(d, i) { return i*barSpacing + barSpacing/2; })
+                    .attr('text-anchor', 'left')
+                    .attr('font-family', 'Helvetica')
+                    .attr('font-size', '14px')
+                    .attr('fill-opacity', 0)
+                    .transition().duration(1000).attr('fill-opacity', 1);
+
+                // include message lengths with each bar
+                plot.selectAll('text').data(model).enter()
+                    .append('text')
+                    .text(function(d) { return d['message']['comment']['text'].length; })
+                    .attr('x', function(d) { return xScale(d['message']['comment']['text'].length); })
+                    .attr('y', function(d, i) { return i*barSpacing + barSpacing/2; })
+                    .attr('text-anchor', 'left')
+                    .attr('font-family', 'Helvetica')
+                    .attr('font-size', '14px')
+                    .attr('fill-opacity', 0)
+                    .transition().duration(1000).attr('fill-opacity', 1);
+
+                rects.on('mouseover', function(thisData) {
+                    rects.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', function() { return users[thisData['userId']]['color']; });
+                });
+
+                rects.on('mouseout', function(thisData) {
+                    rects.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', 'grey');
+                })
 
                 // terminate stream if no more messages
                 if (!(dataset.length > 0)) {
