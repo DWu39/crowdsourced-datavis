@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="d3.v3.min.js"></script>
+    <style>
+        #canvas svg{
+            background-color: teal;
+        }
+
+        .x-axis {
+
+        }
+    </style>
+</head>
+<body>
+    <!-- The SVG element will go in here -->
+    <div id="canvas"></div>
+
+    <script>
+        // ------------- GLOBAL PARAMETERS ------------- //
+        var BUFFER_SIZE = 5; // number of messages to display per second
+        var padding = 30,
+            width = 960,
+            height = 800;
+
+
+        // ------------- GLOBAL DATA ------------- //
+        var dataset,
+            model = []; // viewmodel, hold current displayed set of messages
+
+        var plot = d3.select('#canvas') // element to append messages
+                          .append('svg')
+                          .attr('width', width).attr('height', height);
+
+        var users = {} // [userID] -> array of messages
+
+
+        // ------------- GRAPH PARAMETERS ------------- //
+        // TODO: find better way to initialize graph axes
+        var longestMsgLength = 5; // longest message in dataset
+
+        var xScale = d3.scale.linear()
+                       .domain([0, longestMsgLength])
+                       .range([padding, width - padding]);
+
+        var xAxis = d3.svg.axis().orient('bottom').scale(xScale);
+
+        plot.append("g")
+                 .attr("class", "x-axis")
+                 .attr("transform", "translate(0," + (height - padding) + ")")
+                 .call(xAxis);
+
+
+        // ------------- LOAD DATA ------------- //
+        d3.csv('communication.csv', function(data) {
+
+            data = data.splice(0, 140); // TESTING
+
+            // filter for only messages
+            dataset = data.filter(function(d) {
+                var message = JSON.parse(d['message']);
+                return message['type'] === 'comment';
+            });
+
+            // convert the messages in dataset to json
+            dataset = dataset.map(function(d) {
+                d['message'] = JSON.parse(d['message']);
+                return d;
+            })
+
+
+            // ------------- STREAM MESSAGES ------------- //
+            var stream = setInterval(function() {
+
+                var nextBatch = dataset.slice(0,BUFFER_SIZE);
+
+                // check if we need to rescale
+                var maxInNewBatch = d3.max(nextBatch, function(d) {
+                    return d['message']['comment']['text'].length;
+                });
+
+                // adjust scale, axes, and bars
+                if (maxInNewBatch > longestMsgLength) {
+                    xScale.domain([0, maxInNewBatch]);
+                    xAxis = d3.svg.axis().orient('bottom').scale(xScale);
+                    plot.select('.x-axis')
+                             .transition()
+                             .call(xAxis);
+                }
+
+                model = model.concat(nextBatch);
+                dataset = dataset.slice(BUFFER_SIZE);
+
+                plot.selectAll('rect').data(model).enter()
+                    .append('rect')
+                    .attr('x', padding)
+                    .attr('y', function(d, i) { return i*20; })
+                    .attr('height', 15)
+                    .attr('width', function(d) {
+                        console.log(d['message']['comment']['text']);
+                        return xScale(d['message']['comment']['text'].length);
+                    })
+
+                // terminate stream if no more messages
+                if (!(dataset.length > 0)) {
+                    clearInterval(stream);
+                    console.log('no more messages!');
+                }
+            },1000);
+        });
+    </script>
+</body>
+</html>

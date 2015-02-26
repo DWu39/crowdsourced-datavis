@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- <script src="/d3.v3.min.js"></script> -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        p {
+            font-family: Helvetica;
+            font-size: 30px;
+        }
+    </style>
+</head>
+<body>
+    <p>User activity levels</p>
+    <div id='chart'></div>
+
+    <script>
+        // Initialization
+        // var svg = d3.select('#chart').append('svg');
+        var dataset = {}; // Holds [username] -> array of messages
+        var socket = io();
+
+        // Create graph
+
+        // catching connections
+        socket.on('new connection', function(conn) {
+            console.log(conn);
+            dataset[conn['name']] = [];
+            console.log(dataset);
+        });
+
+        // catching chat message
+        socket.on('chat message', function(data){
+            var msg = data['msg'],
+                user = data['user'];
+
+            dataset[user].push(msg);
+            console.log(dataset[user]);
+            // TODO: update visualization to reflect new msg
+            // svg.data(dataset).enter().append('p').text(msg);
+        });
+    </script>
+</body>
+</html>
