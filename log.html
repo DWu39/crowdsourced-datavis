@@ -4,13 +4,7 @@
     <meta charset="utf-8">
     <script src="d3.v3.min.js"></script>
     <style>
-        #canvas svg{
-            background-color: teal;
-        }
 
-        .x-axis {
-
-        }
     </style>
 </head>
 <body>
@@ -19,7 +13,7 @@
 
     <script>
         // ------------- GLOBAL PARAMETERS ------------- //
-        var BUFFER_SIZE = 5; // number of messages to display per second
+        var BUFFER_SIZE = 5; // number of messages to display per interval
         var padding = 30,
             width = 960,
             height = 800;
@@ -73,32 +67,40 @@
             // ------------- STREAM MESSAGES ------------- //
             var stream = setInterval(function() {
 
-                var nextBatch = dataset.slice(0,BUFFER_SIZE);
+                var nextBatch = dataset.slice(0, BUFFER_SIZE);
 
                 // check if we need to rescale
-                var maxInNewBatch = d3.max(nextBatch, function(d) {
+                var maxInNextBatch = d3.max(nextBatch, function(d) {
                     return d['message']['comment']['text'].length;
                 });
 
                 // adjust scale, axes, and bars
-                if (maxInNewBatch > longestMsgLength) {
-                    xScale.domain([0, maxInNewBatch]);
+                if (maxInNextBatch > longestMsgLength) {
+                    longestMsgLength = maxInNextBatch;
+                    xScale.domain([0, longestMsgLength]);
                     xAxis = d3.svg.axis().orient('bottom').scale(xScale);
                     plot.select('.x-axis')
-                             .transition()
+                             .transition().duration(1000).ease("sin-in-out")
                              .call(xAxis);
                 }
 
                 model = model.concat(nextBatch);
                 dataset = dataset.slice(BUFFER_SIZE);
 
+                // join new data
+                var rects = plot.selectAll('rect').data(model);
+
+                // update old data
+                rects.style('fill', 'red');
+
+                // append new messages to plot
                 plot.selectAll('rect').data(model).enter()
                     .append('rect')
-                    .attr('x', padding)
-                    .attr('y', function(d, i) { return i*20; })
+                    .attr('x', xScale(0))
+                    .attr('y', function(d, i) { return i*25; })
                     .attr('height', 15)
                     .attr('width', function(d) {
-                        console.log(d['message']['comment']['text']);
+                        // TODO: Why is this going all the way to the end?
                         return xScale(d['message']['comment']['text'].length);
                     })
 
