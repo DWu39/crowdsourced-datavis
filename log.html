@@ -31,6 +31,14 @@
     <div id='display'></div>
 
     <script>
+        // ------------- CONSTRUCTORS ------------- //
+
+        // create a new message object
+        function Message(event) {
+
+        }
+
+
         // ------------- GLOBAL PARAMETERS ------------- //
         var buffer_size = 5; // number of messages to display per interval
         var padding = 30,
@@ -78,11 +86,14 @@
                 return message['type'] === 'comment';
             });
 
-            // convert the messages in dataset to json
+            // convert dataset to all Message objects
             dataset = dataset.map(function(d) {
                 d['message'] = JSON.parse(d['message']);
                 return d;
             })
+
+            console.log(dataset[0]);
+            return;
 
 
             // ------------- STREAM MESSAGES ------------- //
@@ -94,12 +105,12 @@
                 // TODO: don't actually need to store messages themselves?
                 nextBatch.forEach(function(d) {
                     if (users[d['userId']]) {
-                        users[d['userId']]['messages'].push(d['message']['comment']['text']);
+                        users[d['userId']]['messages'].push(d);
                     // new user must give a color too
                     } else {
                         users[d['userId']] = {
                             color: color(Math.random()),
-                            messages: [d['message']['comment']['text']]
+                            messages: [d]
                         }
                     }
                 })
