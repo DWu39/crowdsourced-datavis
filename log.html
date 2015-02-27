@@ -4,18 +4,31 @@
     <meta charset="utf-8">
     <script src="d3.v3.min.js"></script>
     <style>
-        rect.highlight {
-            fill: blue;
+        .user-name, .msg-length {
+            font-family: 'Helvetica';
+            font-size: 14px;
         }
 
-        #canvas {
-            overflow: auto;
+        div {
+            display: inline-block;
+            border: 1px solid #f3f3f3;
+        }
+
+        #display {
+            position: fixed;
+            margin: 30px;
+            width: 640px;
+            height: 500px;
+            font-family: 'Helvetica';
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <!-- The SVG element will go in here -->
-    <div id="canvas"></div>
+    <div id='canvas'></div>
+
+    <div id='display'></div>
 
     <script>
         // ------------- GLOBAL PARAMETERS ------------- //
@@ -39,31 +52,25 @@
                           .append('svg')
                           .attr('width', width).attr('height', height);
 
-        var users = {} // index of messages: [userId] -> array of messages
+        var users = {} // users to colors
 
 
         // ------------- GRAPH PARAMETERS ------------- //
-        // TODO: find better way to initialize graph axes
-        var longestMsgLength = 5; // longest message in dataset
+        var color = d3.scale.category20(); // color picker
+
+        var longestMsgLength = null; // longest message in viewmodel
 
         var xScale = d3.scale.linear()
                        .domain([0, longestMsgLength])
-                       .range([padding, width - padding]);
+                       .range([padding, width - padding - offset]);
 
-        var xAxis = d3.svg.axis().orient('bottom').scale(xScale);
 
-        var color = d3.scale.category20(); // color picker
-
-        // plot.append("g")
-        //          .attr("class", "x-axis")
-        //          .attr("transform", "translate(0," + (height - padding) + ")")
-        //          .call(xAxis);
+        // ------------- DISPLAY PARAMETERS ------------- //
+        var display = d3.select('#display');
 
 
         // ------------- LOAD DATA ------------- //
         d3.csv('communication.csv', function(data) {
-
-            // data = data.splice(0, 140);
 
             // filter for only messages
             dataset = data.filter(function(d) {
@@ -84,6 +91,7 @@
                 var nextBatch = dataset.slice(0, Math.floor(buffer_size*Math.random()) + 1);
 
                 // add new messages to index
+                // TODO: don't actually need to store messages themselves?
                 nextBatch.forEach(function(d) {
                     if (users[d['userId']]) {
                         users[d['userId']]['messages'].push(d['message']['comment']['text']);
@@ -103,14 +111,13 @@
 
                 // adjust scale, axes, and bars
                 if (maxInNextBatch > longestMsgLength) {
+                    console.log(maxInNextBatch);
                     longestMsgLength = maxInNextBatch;
                     xScale.domain([0, longestMsgLength]);
-                    xAxis = d3.svg.axis().orient('bottom').scale(xScale);
-                    plot.select('.x-axis')
-                             .transition().duration(1000).ease("sin-in-out")
-                             .call(xAxis);
+                    console.log(xScale(maxInNextBatch));
                 }
 
+                // adjust viewmodel and remove new messages from dataset
                 model = model.concat(nextBatch);
                 dataset = dataset.slice(nextBatch.length);
 
@@ -120,68 +127,83 @@
                     plot.attr('height', totalBarHeight);
                 }
 
-                // join new data
-                var rects = plot.selectAll('rect').data(model);
 
-                // TODO: update old data
-                // rects.style('fill', 'red');
+                // ------------- ADD ELEMENTS ------------- //
 
                 // TODO: combine rect and text into a g?
-                // append new messages to plot
+                // append new message bars to plot
+                var rects = plot.selectAll('rect').data(model);
+
                 rects.enter()
-                    .append('rect')
-                    .style('fill', 'grey')
-                    .attr('x', offset + xScale(0))
-                    .attr('y', function(d, i) { return i*barSpacing; })
-                    .attr('height', barWidth)
+                     .append('rect')
+                     .style('fill', 'grey')
+                     .attr('x', offset + xScale(0))
+                     .attr('y', function(d, i) { return i*barSpacing; })
+                     .attr('height', barWidth)
+                     .on('mouseover', function(d) { console.log(d['userId']); });
+
+                // update + enter: normalize bar lengths
+                rects.transition().duration(750)
                     .attr('width', function(d) {
-                        // TODO: Why is this going all the way to the end?
                         return xScale(d['message']['comment']['text'].length);
-                    })
-                    // .attr('data-user', function(d) { return d['userId']; })
-                    .attr('fill-opacity', 0)
-                    .transition().duration(1000).attr('fill-opacity', 1);
+                    });
 
-                // include userIds with messages
-                plot.selectAll('text').data(model).enter()
+                // append userIds before message bars
+                var userNames = plot.selectAll('text.user-name').data(model);
+
+                userNames.enter()
                     .append('text')
-                    .text(function(d) { return d['userId'] })
-                    .attr('x', padding)
-                    .attr('y', function(d, i) { return i*barSpacing + barSpacing/2; })
-                    .attr('text-anchor', 'left')
-                    .attr('font-family', 'Helvetica')
-                    .attr('font-size', '14px')
-                    .attr('fill-opacity', 0)
-                    .transition().duration(1000).attr('fill-opacity', 1);
+                        .text(function(d) { return d['userId'] })
+                        .attr('x', padding)
+                        .attr('y', function(d, i) { return i*barSpacing + barSpacing/2; })
+                        .attr('text-anchor', 'left')
+                        .attr('fill', 'grey')
+                        .classed('user-name', true);
 
-                // include message lengths with each bar
-                plot.selectAll('text').data(model).enter()
+                // append message lengths to end of bars
+                var msgLengths = plot.selectAll('text.msg-length').data(model);
+
+                msgLengths.enter()
                     .append('text')
-                    .text(function(d) { return d['message']['comment']['text'].length; })
-                    .attr('x', function(d) { return xScale(d['message']['comment']['text'].length); })
-                    .attr('y', function(d, i) { return i*barSpacing + barSpacing/2; })
-                    .attr('text-anchor', 'left')
-                    .attr('font-family', 'Helvetica')
-                    .attr('font-size', '14px')
-                    .attr('fill-opacity', 0)
-                    .transition().duration(1000).attr('fill-opacity', 1);
+                        .text(function(d) { return d['message']['comment']['text'].length; })
+                        .attr('y', function(d, i) { return i*barSpacing + barSpacing/2; })
+                        .attr('text-anchor', 'right')
+                        .attr('fill', 'white')
+                        .classed('msg-length', true);
 
+                // update + enter: adjust number placement as scale changes
+                msgLengths.transition().duration(750)
+                    .attr('x', function(d) {
+                        return offset + xScale(d['message']['comment']['text'].length);
+                    });
+
+                // bind events to bars
                 rects.on('mouseover', function(thisData) {
+                    // highlight other bars with same userId
                     rects.filter(function(d) { return d['userId'] === thisData['userId']; })
-                         .style('fill', function() { return users[thisData['userId']]['color']; });
+                         .style('fill', users[thisData['userId']]['color']);
+                    // highlight names as well
+                    userNames.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', users[thisData['userId']]['color']);
+
+                    // update display
+                    display.text(function() { return thisData['message']['comment']['text']; })
                 });
 
                 rects.on('mouseout', function(thisData) {
                     rects.filter(function(d) { return d['userId'] === thisData['userId']; })
                          .style('fill', 'grey');
+                    userNames.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', 'grey');
                 })
+
 
                 // terminate stream if no more messages
                 if (!(dataset.length > 0)) {
                     clearInterval(stream);
                     console.log('no more messages!');
                 }
-            },1000);
+            }, 2000);
         });
     </script>
 </body>
