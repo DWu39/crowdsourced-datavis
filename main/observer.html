@@ -59,49 +59,41 @@
                 this.id = data.id;
                 this.name = data.name;
                 this.messages = [];
+                this.value = 0;
             }
             catch (err) {
                 alert('could not create user because of ' + err);
             }
         }
 
-        function Link(s, t, v) {
-            this.source = s;
-            this.target = t;
-            this.value = v;
-        }
+        User.prototype.addMessage = function(text, timestamp) {
+            this.messages.append(new Message(text, timestamp));
+        };
 
         function Message(text, timestamp) {
             this.text = text;
             this.timestamp = timestamp;
         }
 
+
+        // ---------- HOLD DATA ---------- //
         var model = {
             init: function() {
                 this.users = {};
                 // links is a nested object representing an adjacency list
                 // i.e. links[id] = {id2: value, id10: value}
                 this.links = {};
-                this.matrix = [];
             },
-
-            getNumUsers: function() {
-                var size = 0;
-                for (var key in this.users) {
-                    if (this.users.hasOwnProperty(key)) size++;
-                }
-                return size;
-            }
 
             addUser: function(data) {
                 var user = new User(data);
                 this.users[user.id] = user;
             },
 
-            addMessage: function(id, message) {
+            addMessage: function(id, message, timestamp) {
                 try {
                     if (!this.users[id]) throw 'user id bad';
-                    this.users[id].messages.append(message);
+                    this.users[id].addMessage(message, timestamp);
                 }
                 catch (err) {
                     alert('could not add message because ' + err);
@@ -120,44 +112,102 @@
             }
         }
 
+        var matrix = {
+            init: function(width) {
+                width = typeof width !== 'undefined' ? width : 720;
 
+                this.matrix = [];
+                this.ordering = nameOrdering;
+                this.x = d3.scale.ordinal().rangeBands([0, width]); // for the position of user
+                this.z = d3.scale.linear().domain([0, 4]).clamp(true); // for the link strength, only 5 levels
+                this.c = d3.scale.category10().domain(d3.range(10)); // for the cluster colors
+            },
 
-        // ---------- MATRIX DISPLAY ---------- //
-        var settings = {
-            margin : {top: 80, right: 0, bottom: 10, left: 80},
-            width : 720,
-            height : 720
+            setOrdering: function(ordering) {
+                if this.hasOwnProperty(ordering) this.ordering = ordering;
+                else console.log('ordering not found');
+            }
+
+            nameOrdering: function() {
+                var obj = model.users,
+                    users = Object.keys(obj).map(function(key) { return obj[key]; });
+
+                return d3.range(this.matrix.length).sort(function(a, b) {
+                    return d3.ascending(users[a].name, users[b].name);
+                });
+            },
+
+            // insert new row for a user in the right location
+            addUser: function(user) {
+                if (!user.id in model.users) {
+                    console.log('user does not exist');
+
+                } else {
+                    var ordering = this.ordering();
+
+                    var matrix = this.matrix,
+                        n = matrix.length;
+                    // append new column to old rows
+                    matrix.map(function(row, i) { row.push({x: n, y: i, z: 0 }); });
+                    // create new row
+                    matrix[n] = d3.range(n+1).map(function(j) { return {x: j, y: n, z: 0 }; });
+                }
+            },
+
+            // return index corresponding to id
+            getIndex: function(id) {
+                matrix[0].forEach(function(col, i) {
+                    if (col.id == id) return i;
+                });
+                return null;
+            }
+
+            // create new link or add value to existing link
+            newLink: function(src, target, value) {
+                var srcIndex = getIndex(src),
+                    targetIndex = getIndex(target);
+
+                if (matrix[srcIndex][targetIndex] > 0) {
+                    matrix[srcIndex][targetIndex] += value;
+                } else {
+                    matrix[srcIndex][targetIndex] = value;
+                }
+            }
         }
-
-        var svg = d3.select('#matrix').append('svg')
-            .attr("width", settings.width + settings.margin.left + settings.margin.right)
-            .attr("height", settings.height + settings.margin.top + settings.margin.bottom)
-            .style("margin-left", settings.margin.left + "px")
-            .append("g")
-            .attr("transform", "translate(" + settings.margin.left + "," + settings.margin.top + ")");
-
-
-        // ---------- SCALES ---------- //
-        var x = d3.scale.ordinal().rangeBands([0, settings.width]), // for the position of user
-            z = d3.scale.linear().domain([0, 4]).clamp(true), // for the link strength, only 5 levels
-            c = d3.scale.category10().domain(d3.range(10)); // for the cluster colors
 
 
         function createMatrix(data) {
+
+            // ---------- MATRIX DISPLAY ---------- //
+            var margin = {top: 80, right: 0, bottom: 10, left: 80},
+                width = 720,
+                height = 720;
+
+            var svg = d3.select('#matrix').append('svg')
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .style("margin-left", margin.left + "px")
+                .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+            // ---------- SCALES ---------- //
+            var x = d3.scale.ordinal().rangeBands([0, width]), // for the position of user
+                z = d3.scale.linear().domain([0, 4]).clamp(true), // for the link strength, only 5 levels
+                c = d3.scale.category10().domain(d3.range(10)); // for the cluster colors
+
             // to hold the data
             var matrix = [],
-                users = [],
-                links = [],
+                users = data.users,
+                links = data.links,
                 n = data.users.length;
 
-            // create users and initialize matrix
-            data.users.forEach(function(user, i) {
-                users.push(new User(user));
+            // initialize matrix
+            users.forEach(function(user, i) {
                 matrix[i] = d3.range(n).map(function(j) { return {x: j, y: i, z: 0}; });
             });
 
-            // fill in matrix
-            data.links.forEach(function(link) {
+            links.forEach(function(link) {
                 matrix[link.source][link.target].z += link.value; // bottom left triangle
                 matrix[link.target][link.source].z += link.value; // top right triangle
                 matrix[link.source][link.source].z += link.value; // node to itself
@@ -175,8 +225,8 @@
 
             svg.append("rect")
                 .attr("class", "background")
-                .attr("width", settings.width)
-                .attr("height", settings.height);
+                .attr("width", width)
+                .attr("height", height);
 
             var row = svg.selectAll(".row").data(matrix).enter()
                 .append("g")
@@ -184,7 +234,7 @@
                 .attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
                 .each(row);
 
-            row.append("line").attr("x2", settings.width);
+            row.append("line").attr("x2", width);
 
             row.append("text")
                 .attr("x", -6)
@@ -199,7 +249,7 @@
                 .attr("class", "column")
                 .attr("transform", function(d, i) { return "translate(" + x(i) + ")rotate(-90)"; });
 
-            column.append("line").attr("x1", -settings.width);
+            column.append("line").attr("x1", -width);
 
             column.append("text")
                   .attr("x", 6)
@@ -210,7 +260,6 @@
 
             function row(row) {
                 var cell = d3.select(this).selectAll(".cell")
-                    // only get people with count > 0 (any activity)
                     .data(row.filter(function(d) { return d.z; }))
                     .enter().append("rect")
                         .attr("class", "cell")
@@ -218,10 +267,6 @@
                         .attr("width", x.rangeBand())
                         .attr("height", x.rangeBand())
                         .style("fill-opacity", function(d) { return z(d.z); })
-                        // use a color if same group, else black
-                        .style("fill", function(d) {
-                            return users[d.x].group == users[d.y].group ? c(users[d.x].group) : null;
-                        })
                         .on("mouseover", mouseover)
                         .on("mouseout", mouseout);
             }
@@ -236,17 +281,9 @@
             }
         }
 
-        d3.json('data/miserables.json', function(miserables) {
-            var data = {
-                users: miserables.nodes,
-                links: miserables.links
-            }
-            // createMatrix(data);
-        });
-
-
         // ---------- INITIALIZATION ---------- //
         model.init();
+        matrix.init();
     </script>
 </body>
 </html>
