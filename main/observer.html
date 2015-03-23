@@ -140,23 +140,12 @@
                 }
             },
 
-            addLink: function(src, target, value) {
-                var that = this;
-                var value = typeof value !== 'undefined' ? value : 1;
-
-                var from_src = that.links.filter(function(link) { return link.source === src; });
-
-                // update link strength
-                from_src.forEach(function(link) {
-                    if (targets.indexOf(link.target) > 1) {
-                        link.value++;
-                        targets.splice(targets.indexOf(link.target), 1);
-                    }
-                });
-
-                // create new links
+            addLink: function(src, targets, value) {
+                value = typeof a !== 'undefined' ? a : 1;
+                var links = this.links[src] ? this.links[src] : {};
                 targets.forEach(function(target) {
-                    that.links.push({source: src, target: target, value: value });
+                    if (links.hasOwnProperty(target)) links[target] += value;
+                    else links[target] = value;
                 });
             },
 
