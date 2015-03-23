@@ -141,7 +141,7 @@
             },
 
             addLink: function(src, targets, value) {
-                value = typeof a !== 'undefined' ? a : 1;
+                value = typeof value !== 'undefined' ? value : 1;
                 var links = this.links[src] ? this.links[src] : {};
                 targets.forEach(function(target) {
                     if (links.hasOwnProperty(target)) links[target] += value;
