@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="js/d3.v3.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/styles.css">
+</head>
+<body>
+    <!-- The SVG element will go in here -->
+    <div id='canvas'></div>
+
+    <div id='options'>
+        <p>Bars:</p>
+        <input type='radio' class='bars-setting' name='bar_setting' value='characters' checked>Character Count<br>
+        <input type='radio' class='bars-setting' name='bar_setting' value='words'>Word Count
+    </div>
+
+    <div id='display'></div>
+
+    <script>
+        /** NOTES:
+        * 1) Use only one scale to manage what data to display
+        * 2) Create message object
+        * 3) C3 or Plottable for histogram?
+        */
+
+
+        // ------------- MISC PARAMETERS ------------- //
+        var buffer_size = 5; // number of messages to display per interval
+        var flow_params = {
+            padding : 30,
+            width : 720,
+            height : 800,
+            totalBarHeight : 0,
+            barWidth : 30,
+            barSpacing : 48,
+            offset : 150 // to provide space for names
+        }
+
+        var display_params = {
+            width : 640,
+            height : 400,
+            padding : 10,
+            margin : {top: 10, right: 30, bottom: 30, left: 30}
+        }
+
+
+        // ------------- CONSTRUCTORS/UTILTIY FUNCTIONS ------------- //
+
+        // return number of characters (no spaces) in message
+        function charCount(message) { return message.replace(/ /g, '').length; }
+
+        // return number of words in message
+        function wordCount(message) { return message.split(' ').length; }
+
+        // message class
+        function Message(data) {}
+
+        // generate a histogram, x-axis = length bins, y-axis = count
+        function createHistogram(allMessages) {
+            d3.select('#display svg').remove();
+
+            var messages = allMessages.map(function(d) { return d.message; }),
+                msgLengths = messages.map(function(m) { return m.comment.text.length; });
+
+            var x = d3.scale.linear()
+                      .domain(d3.extent(msgLengths))
+                      .range([0, display_params.width - display_params.padding]);
+
+            var data = d3.layout.histogram().bins(x.ticks(5))(msgLengths);
+
+            var y = d3.scale.linear()
+                      .domain([0, d3.max(data, function(d) { return d.y; })])
+                      .range([display_params.height, 0]);
+
+            var xAxis = d3.svg.axis().scale(x).orient('bottom');
+
+            var yAxis = d3.svg.axis().scale(y).orient('left');
+
+            var svg = d3.select('#display').append("svg")
+                        .attr("width", display_params.width + display_params.margin.left + display_params.margin.right)
+                        .attr("height", display_params.height + display_params.margin.top + display_params.margin.bottom)
+                        .append("g");
+
+            var bar = svg.selectAll(".bar")
+                         .data(data)
+                         .enter().append("g")
+                            .attr("class", "bar")
+                            .attr("transform", function(d) {
+                                return "translate(" + (x(d.x)) + "," + y(d.y) + ")"; });
+
+                bar.append("rect")
+                    .attr("x", 1)
+                    .attr("width", function() {
+                        // TODO: fix this width bug
+                        return 50;
+                        return x(data[0].dx) - 1;
+                    })
+                    .attr("height", function(d) { return display_params.height - y(d.y); })
+
+                bar.append("text")
+                    .attr("dy", ".75em")
+                    .attr("y", 6)
+                    .attr("x", 25)
+                    .attr("text-anchor", "middle")
+                    .text(function(d) { return d.y; });
+
+                bar.data(allMessages)
+                    .attr('fill', function(d) {
+                        return users[d['userId']].color; });
+
+                svg.append("g")
+                    .attr("class", "x-axis")
+                    .attr("transform", "translate(0," + display_params.height + ")")
+                    .call(xAxis);
+        }
+
+
+        // ------------- DATA ------------- //
+        var dataset,
+            model = []; // viewmodel, hold current displayed set of messages
+
+        var plot = d3.select('#canvas') // element to append messages
+                          .append('svg')
+                          .attr('width', flow_params.width).attr('height', flow_params.height);
+
+        var users = {} // users to colors
+
+
+        // ------------- FLOW (bars area) ------------- //
+        var color = d3.scale.category20(); // color picker
+
+        var longestMsgLengthByChars = null,
+            longestMsgLengthByWords = null;
+
+        var xScale = d3.scale.linear()
+                       .domain([0, longestMsgLengthByChars])
+                       .range([0, flow_params.width - flow_params.offset - 100]);
+
+        function setBars(option) {
+            plot.selectAll('rect').transition().duration(750)
+                .attr('width', function(d) {
+                    switch(option) {
+                        case 'characters':
+                            xScale.domain([0, longestMsgLengthByChars]);
+                            var numChars = charCount(d['message']['comment']['text'])
+                            return xScale(numChars);
+
+                        case 'words':
+                            xScale.domain([0, longestMsgLengthByWords]);
+                            var numWords = wordCount(d['message']['comment']['text']);
+                            return xScale(numWords);
+                    }
+                });
+        }
+
+        function setText(option) {
+            plot.selectAll('text.msg-length').transition()
+                .text(function(d) {
+                    switch(option) {
+                        case 'characters':
+                            return charCount(d['message']['comment']['text'])
+
+                        case 'words':
+                            return wordCount(d['message']['comment']['text']);
+                    }
+                });
+        }
+
+
+        // ------------- DISPLAY (top right section) ------------- //
+        var display = d3.select('#display');
+
+        function updateDisplay(data) {
+            var color = users[data['userId']],
+                bars = d3.selectAll('rect')
+                         .filter(function(d) { return d['userId'] === data['userId']; });
+
+            createHistogram(bars.data());
+        }
+
+
+        // ------------- OPTIONS ------------- //
+        var currentBarsSetting = 'characters';
+        var barsButtons = d3.selectAll('.bars-setting');
+
+        // listener for bar value settings
+        barsButtons.on('change', function() {
+            currentBarsSetting = this.value;
+            setBars(currentBarsSetting);
+            setText(currentBarsSetting);
+        });
+
+
+        // ------------- LOAD DATA ------------- //
+        d3.csv('data/communication.csv', function(data) {
+
+            // filter for only messages
+            dataset = data.filter(function(d) {
+                var message = JSON.parse(d['message']);
+                return message['type'] === 'comment';
+            });
+
+            // convert dataset to all Message objects
+            dataset = dataset.map(function(d) {
+                d['message'] = JSON.parse(d['message']);
+                return d;
+            })
+
+
+            // ------------- STREAM MESSAGES ------------- //
+            var stream = setInterval(function() {
+
+                var nextBatch = dataset.slice(0, Math.floor(buffer_size*Math.random()) + 1);
+
+                // add new messages to index
+                // TODO: don't actually need to store messages themselves?
+                nextBatch.forEach(function(d) {
+                    if (users[d['userId']]) {
+                        users[d['userId']]['messages'].push(d);
+                    // new user must give a color too
+                    } else {
+                        users[d['userId']] = {
+                            color: color(Math.random()),
+                            messages: [d]
+                        }
+                    }
+                })
+
+                // check if we need to rescale by chars
+                var maxInNextBatch = d3.max(nextBatch, function(d) {
+                    return charCount(d['message']['comment']['text']);
+                });
+
+                if (maxInNextBatch > longestMsgLengthByChars) {
+                    longestMsgLengthByChars = maxInNextBatch;
+                }
+
+                // check if we need to rescale by words
+                maxInNextBatch = d3.max(nextBatch, function(d) {
+                    return wordCount(d['message']['comment']['text']);
+                });
+
+                // adjust scale, axes, and bars
+                if (maxInNextBatch > longestMsgLengthByWords) {
+                    longestMsgLengthByWords = maxInNextBatch;
+                }
+
+                setBars(currentBarsSetting);
+
+                // adjust viewmodel and remove new messages from dataset
+                model = model.concat(nextBatch);
+                dataset = dataset.slice(nextBatch.length);
+
+                // expand height of svg to account for new elements
+                flow_params.totalBarHeight += nextBatch.length*(flow_params.barSpacing);
+                if (flow_params.totalBarHeight > flow_params.height) {
+                    plot.attr('height', flow_params.totalBarHeight);
+                }
+
+
+                // ------------- ADD ELEMENTS ------------- //
+                // append new message bars to plot
+                var rects = plot.selectAll('rect').data(model);
+
+                rects.enter()
+                     .append('rect')
+                     .style('fill', 'grey')
+                     .attr('x', flow_params.padding + flow_params.offset)
+                     .attr('y', function(d, i) { return i*flow_params.barSpacing; })
+                     .attr('height', flow_params.barWidth);
+
+                // update + enter: normalize bar lengths
+                setBars(currentBarsSetting);
+
+                // append userIds before message bars
+                var userNames = plot.selectAll('text.user-name').data(model);
+
+                userNames.enter()
+                    .append('text')
+                        .text(function(d) { return d['userId'] })
+                        .attr('x', flow_params.padding)
+                        .attr('y', function(d, i) { return i*flow_params.barSpacing + flow_params.barSpacing/2; })
+                        .attr('text-anchor', 'left')
+                        .attr('fill', 'grey')
+                        .classed('user-name', true);
+
+                // // append message lengths to end of bars
+                var msgLengths = plot.selectAll('text.msg-length').data(model);
+
+                msgLengths.enter()
+                    .append('text')
+                        .text(function(d) { return charCount(d['message']['comment']['text']); })
+                        .attr('x', flow_params.width - 25)
+                        .attr('y', function(d, i) { return i*flow_params.barSpacing + flow_params.barSpacing/2; })
+                        .attr('text-anchor', 'right')
+                        .attr('fill', 'grey')
+                        .classed('msg-length', true);
+
+                // update + enter: adjust number placement as scale changes
+                // msgLengths.transition().duration(750)
+                //     .attr('x', function(d) {
+                //         return flow_params.offset + xScale(d['message']['comment']['text'].length);
+                //     });
+
+                // bind events to bars
+                rects.on('mouseover', function(thisData) {
+                    // highlight other bars with same userId
+                    rects.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', users[thisData['userId']]['color']);
+                    // highlight names as well
+                    userNames.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', users[thisData['userId']]['color']);
+
+                    // update display
+                    updateDisplay(thisData);
+                });
+
+                rects.on('mouseout', function(thisData) {
+                    rects.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', 'grey');
+                    userNames.filter(function(d) { return d['userId'] === thisData['userId']; })
+                         .style('fill', 'grey');
+                })
+
+
+                // terminate stream if no more messages
+                if (!(dataset.length > 0)) {
+                    clearInterval(stream);
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

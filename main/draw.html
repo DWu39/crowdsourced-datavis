@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/paper.js"></script>
+
+</head>
+<body>
+    <canvas id="myCanvas" resize></canvas>
+
+    <script>
+        var io = io();
+    </script>
+
+    <script type="text/paperscript" canvas="myCanvas">
+
+        view.viewSize = [window.innerWidth, window.innerHeight];
+
+        function randomColor() {
+            return {
+                red: 0,
+                green: Math.random(),
+                blue: Math.random(),
+                alpha: ( Math.random() * 0.25 ) + 0.05
+            };
+        }
+
+        // Create a new path once, when the script is executed:
+        var myPath;
+
+        tool.maxDistance = 50;
+
+        function onMouseDrag(event) {
+            // Take the click/touch position as the centre of our circle
+            var x = event.middlePoint.x,
+                y = event.middlePoint.y;
+                // The faster the movement, the bigger the circle
+                radius = event.delta.length / 2,
+                color = randomColor();
+
+            drawCircle( x, y, radius, color );
+            emitCircle( x, y, radius, color );
+        }
+
+        function drawCircle( x, y, radius, color ) {
+            var circle = new Path.Circle( new Point( x, y ), radius );
+            circle.fillColor = new RgbColor( color.red, color.green, color.blue, color.alpha );
+            // Refresh the view, so we always get an update, even if the tab is not in focus
+            view.draw();
+        }
+
+        // This function sends the data for a circle to the server
+        // so that the server can broadcast it to every other user
+        function emitCircle( x, y, radius, color ) {
+            var data = {
+                x: x,
+                y: y,
+                radius: radius,
+                color: color
+            };
+
+            io.emit('drawCircle', data, io.id)
+        }
+
+        io.on('drawCircle', function(data) {
+            drawCircle( data.x, data.y, data.radius, data.color );
+        })
+    </script>
+
+</body>
+</html>

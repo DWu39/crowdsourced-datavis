@@ -1,0 +1,51 @@
+* {
+    font-family: 'Helvetica';
+    font-size: 14px;
+}
+
+div {
+    border: 1px solid #f3f3f3;
+    display: inline-block;
+}
+
+#canvas {
+    margin-top: 20px;
+}
+
+#display {
+    position: fixed;
+    margin: 30px;
+    margin-top: 20px;
+    height: 400px;
+    width: 640px;
+    top: 200px;
+    font-family: 'Helvetica';
+    font-size: 14px;
+}
+
+#options {
+    position: fixed;
+    margin: 30px;
+    height: 120px;
+    width: 640px;
+}
+
+.bar rect {
+  shape-rendering: crispEdges;
+}
+
+.bar text {
+  fill: white;
+}
+
+.x-axis path,
+.x-axis line {
+    fill: none;
+    stroke: grey;
+    shape-rendering: crispEdges;
+}
+
+.x-axis text {
+    font-family: 'Helvetica';
+    font-size: 11px;
+}

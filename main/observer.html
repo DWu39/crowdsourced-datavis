@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="js/d3.v3.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" type="text/css" href="css/styles.css">
+
+    <style>
+        .background {
+            fill: #eee;
+        }
+
+        line {
+            stroke: #fff;
+        }
+
+        text.active {
+            fill: red;
+        }
+
+        *{
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id='matrix'></div>
+    <!-- <div id='timeline'></div> -->
+
+    <script>
+        // ---------- SOCKET.IO and EVENTS ---------- //
+        var io = io();
+
+        // TODO: get all other sockets and initialize model
+        io.emit('observerConnect', function(data) {
+            // store data in model and initialize matrix
+        });
+
+        // TODO: receive a draw event
+        io.on('drawCircle', function(data) {
+            console.log(data);
+            // update the model
+            // update the matrix
+        });
+
+        // TODO: catch new connections
+        io.on('newConnection', function(conn) {
+            console.log(conn);
+        });
+
+
+        // ---------- CLASSES ---------- //
+        function User(data) {
+            try {
+                if (!data.id) throw 'missing id';
+                if (!data.name) throw 'missing name';
+
+                this.id = data.id;
+                this.name = data.name;
+                this.messages = [];
+            }
+            catch (err) {
+                alert('could not create user because of ' + err);
+            }
+        }
+
+        function Link(s, t, v) {
+            this.source = s;
+            this.target = t;
+            this.value = v;
+        }
+
+        function Message(text, timestamp) {
+            this.text = text;
+            this.timestamp = timestamp;
+        }
+
+        var model = {
+            init: function() {
+                this.users = {};
+                this.links = [];
+            },
+
+            addUser: function(data) {
+                var user = new User(data);
+                this.users[user.id] = user;
+            },
+
+            addMessage: function(id, message) {
+                try {
+                    if (!this.users[id]) throw 'user id bad';
+                    this.users[id].messages.append(message);
+                }
+                catch (err) {
+                    alert('could not add message because ' + err);
+                }
+            },
+
+            addLink: function(src, targets, value) {
+                value = typeof a !== 'undefined' ? a : 1;
+
+                // filter array for only links from src
+                var from_src = this.links.filter(function(link) { return link.source = src; });
+
+                // update link strength
+                from_src.forEach(function(link) {
+                    if (targets.indexOf(link.target) > -1) {
+                        link.value++;
+                        targets.splice(targets.indexOf(link.target), 1);
+                    }
+                });
+
+                // create new links
+                targets.forEach(function(target) {
+                    var link = new Link(src, target, value);
+                    this.links.append(link);
+                });
+            }
+        }
+
+
+
+        // ---------- MATRIX DISPLAY ---------- //
+        var settings = {
+            margin : {top: 80, right: 0, bottom: 10, left: 80},
+            width : 720,
+            height : 720
+        }
+
+        var svg = d3.select('#matrix').append('svg')
+            .attr("width", settings.width + settings.margin.left + settings.margin.right)
+            .attr("height", settings.height + settings.margin.top + settings.margin.bottom)
+            .style("margin-left", settings.margin.left + "px")
+            .append("g")
+            .attr("transform", "translate(" + settings.margin.left + "," + settings.margin.top + ")");
+
+
+        // ---------- SCALES ---------- //
+        var x = d3.scale.ordinal().rangeBands([0, settings.width]), // for the position of actor
+            z = d3.scale.linear().domain([0, 4]).clamp(true), // for the co-occurences, only 5 shades of opacity
+            c = d3.scale.category10().domain(d3.range(10)); // for the cluster colors
+
+
+        function createMatrix(data) {
+            // to hold the data
+            var matrix = [],
+                users = [],
+                links = [],
+                n = data.users.length;
+
+            // create users and initialize matrix
+            data.users.forEach(function(user, i) {
+                users.push(new User(user));
+                matrix[i] = d3.range(n).map(function(j) { return {x: j, y: i, z: 0}; });
+            });
+
+            // fill in matrix
+            data.links.forEach(function(link) {
+                matrix[link.source][link.target].z += link.value; // bottom left triangle
+                matrix[link.target][link.source].z += link.value; // top right triangle
+                matrix[link.source][link.source].z += link.value; // node to itself
+                matrix[link.target][link.target].z += link.value; // node to itself
+                users[link.source].count += link.value;
+                users[link.target].count += link.value;
+            })
+
+            // ordering of the elements in the matrix
+            var nameOrdering = d3.range(n).sort(function(a, b) {
+                return d3.ascending(users[a].name, users[b].name);
+            })
+
+            x.domain(nameOrdering);
+
+            svg.append("rect")
+                .attr("class", "background")
+                .attr("width", settings.width)
+                .attr("height", settings.height);
+
+            var row = svg.selectAll(".row").data(matrix).enter()
+                .append("g")
+                .attr("class", "row")
+                .attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
+                .each(row);
+
+            row.append("line").attr("x2", settings.width);
+
+            row.append("text")
+                .attr("x", -6)
+                .attr("y", x.rangeBand() / 2)
+                .attr("dy", ".32em")
+                .attr("text-anchor", "end")
+                .text(function(d, i) { return users[i].name; });
+
+            var column = svg.selectAll(".column")
+                .data(matrix)
+                .enter().append("g")
+                .attr("class", "column")
+                .attr("transform", function(d, i) { return "translate(" + x(i) + ")rotate(-90)"; });
+
+            column.append("line").attr("x1", -settings.width);
+
+            column.append("text")
+                  .attr("x", 6)
+                  .attr("y", x.rangeBand() / 2)
+                  .attr("dy", ".32em")
+                  .attr("text-anchor", "start")
+                  .text(function(d, i) { return users[i].name; });
+
+            function row(row) {
+                var cell = d3.select(this).selectAll(".cell")
+                    // only get people with count > 0 (any activity)
+                    .data(row.filter(function(d) { return d.z; }))
+                    .enter().append("rect")
+                        .attr("class", "cell")
+                        .attr("x", function(d) { return x(d.x); })
+                        .attr("width", x.rangeBand())
+                        .attr("height", x.rangeBand())
+                        .style("fill-opacity", function(d) { return z(d.z); })
+                        // use a color if same group, else black
+                        .style("fill", function(d) {
+                            return users[d.x].group == users[d.y].group ? c(users[d.x].group) : null;
+                        })
+                        .on("mouseover", mouseover)
+                        .on("mouseout", mouseout);
+            }
+
+            function mouseover(p) {
+                d3.selectAll(".row text").classed("active", function(d, i) { return i == p.y; });
+                d3.selectAll(".column text").classed("active", function(d, i) { return i == p.x; });
+            }
+
+            function mouseout() {
+                d3.selectAll("text").classed("active", false);
+            }
+        }
+
+        d3.json('data/miserables.json', function(miserables) {
+            var data = {
+                users: miserables.nodes,
+                links: miserables.links
+            }
+            createMatrix(data);
+        });
+    </script>
+</body>
+</html>
