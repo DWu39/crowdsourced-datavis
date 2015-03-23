@@ -79,7 +79,9 @@
         var model = {
             init: function() {
                 this.users = {};
-                this.links = [];
+                // links is a nested object representing an adjacency list
+                // i.e. links[id] = {id2: value, id10: value}
+                this.links = {};
             },
 
             addUser: function(data) {
@@ -100,21 +102,11 @@
             addLink: function(src, targets, value) {
                 value = typeof a !== 'undefined' ? a : 1;
 
-                // filter array for only links from src
-                var from_src = this.links.filter(function(link) { return link.source = src; });
+                var links = this.links[src] ? this.links[src] : {};
 
-                // update link strength
-                from_src.forEach(function(link) {
-                    if (targets.indexOf(link.target) > -1) {
-                        link.value++;
-                        targets.splice(targets.indexOf(link.target), 1);
-                    }
-                });
-
-                // create new links
                 targets.forEach(function(target) {
-                    var link = new Link(src, target, value);
-                    this.links.append(link);
+                    if (target in links) links[target] += value;
+                    else links[target] = value;
                 });
             }
         }
@@ -240,7 +232,7 @@
                 users: miserables.nodes,
                 links: miserables.links
             }
-            createMatrix(data);
+            // createMatrix(data);
         });
     </script>
 </body>
