@@ -3,18 +3,63 @@
 <head>
     <script src="/socket.io/socket.io.js"></script>
     <script src="/js/paper.js"></script>
+    <script src="http://code.jquery.com/jquery-1.11.1.js"></script>
+    <title>Ugly Interface</title>
+    <style>
+        #myCanvas {
+            width: 720px;
+            height: 720px;
+            display: inline-block;
+            float: right;
+            border: 1px solid black;
+        }
 
+        #messages {
+            width: 500px;
+            height: 720px;
+            display: inline-block;
+            float: right;
+            border: 1px solid black;
+        }
+    </style>
 </head>
 <body>
     <canvas id="myCanvas" resize></canvas>
 
+    <ul id="messages"></ul>
+    <form action="">
+      <input id="m" autocomplete="off" /><button>Send</button>
+    </form>
+
     <script>
         var io = io();
+
+        var name = prompt('Enter name: ');
+        io.emit('join', name);
+
+        // sending chat message
+        $('form').submit(function(){
+          io.emit('chat message', $('#m').val());
+          $('#m').val('');
+          return false;
+        });
+
+        // catching chat message
+        io.on('chat message', function(data){
+          var msg = data['msg'],
+              user = data['user'];
+          $('#messages').append($('<li>').text(user + ': ' + msg));
+        });
+
+        // catching connections
+        io.on('new connection', function(conn) {
+          $('#messages').append($('<li>').text(conn['msg']));
+        });
     </script>
 
     <script type="text/paperscript" canvas="myCanvas">
 
-        view.viewSize = [window.innerWidth, window.innerHeight];
+        view.viewSize = [720, 720];
 
         function randomColor() {
             return {

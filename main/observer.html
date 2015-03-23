@@ -84,8 +84,7 @@
                 if (data) {
                     // read in the data
                     data.forEach(function(message) {
-                        console.log(that.users);
-                        if (!(message.name in that.users)) {
+                        if (!that.getUserByName(message.name)) {
                             that.addUser(message.name);
                         }
                         var user = that.getUserByName(message.name);
@@ -140,13 +139,21 @@
                 }
             },
 
-            addLink: function(src, targets, value) {
-                value = typeof value !== 'undefined' ? value : 1;
-                var links = this.links[src] ? this.links[src] : {};
-                targets.forEach(function(target) {
-                    if (links.hasOwnProperty(target)) links[target] += value;
-                    else links[target] = value;
+            addLink: function(src, target, value) {
+                var value = typeof value !== 'undefined' ? value : 1;
+
+                var link;
+
+                // find link with src and target in links
+                this.links.forEach(function(link) {
+                    if (link.source === src && link.target === target) { link = link; }
                 });
+
+                if (link) {
+                    link.value += value;
+                } else {
+                    this.links.push({source: src, target: target, value: value});
+                }
             },
 
             computeValue: function(datum) {
@@ -359,33 +366,33 @@
 
         });
 
-        // // fake data
-        // model.addUser('Bob');
-        // model.addLink(0, [0], 3);
-        // createMatrix(model);
+        // fake data
+        model.addUser('Bob');
+        model.addLink(0, [0], 3);
+        createMatrix(model);
 
-        // setTimeout(function() {
-        //     model.addUser('Alice');
-        //     model.addLink(0,[0,1], 2);
-        //     createMatrix(model);
+        setTimeout(function() {
+            model.addUser('Alice');
+            model.addLink(0,[0,1], 2);
+            createMatrix(model);
 
-        //     setTimeout(function() {
-        //         model.addLink(0,[0, 1], 7);
-        //         model.addUser('Mark');
-        //         model.addLink(1,[0,1,2], 12);
-        //         model.addLink(2, [0,1,2], 30);
-        //         createMatrix(model);
+            setTimeout(function() {
+                model.addLink(0,[0, 1], 7);
+                model.addUser('Mark');
+                model.addLink(1,[0,1,2], 12);
+                model.addLink(2, [0,1,2], 30);
+                createMatrix(model);
 
-        //         setTimeout(function() {
-        //             model.addUser('Merry');
-        //             model.addLink(1,[0,1,2,3], 12);
-        //             model.addLink(3, [0,1,2,3], 10);
-        //             createMatrix(model);
-        //         }, 2000);
+                setTimeout(function() {
+                    model.addUser('Merry');
+                    model.addLink(1,[0,1,2,3], 12);
+                    model.addLink(3, [0,1,2,3], 10);
+                    createMatrix(model);
+                }, 2000);
 
-        //     }, 2000);
+            }, 2000);
 
-        // }, 2000);
+        }, 2000);
 
 
         // matrix.init();
