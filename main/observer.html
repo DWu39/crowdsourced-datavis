@@ -26,7 +26,7 @@
 </head>
 <body>
     <div id='matrix'></div>
-    <!-- <div id='timeline'></div> -->
+    <input id="timeline" type="range" min="0" max="100" value="30"/>
 
     <script>
         // ---------- SOCKET.IO and EVENTS ---------- //
@@ -51,24 +51,21 @@
 
 
         // ---------- CLASSES ---------- //
-        function User(data) {
-            try {
-                if (!data.id) throw 'missing id';
-                if (!data.name) throw 'missing name';
-
-                this.id = data.id;
-                this.name = data.name;
-                this.messages = [];
-                this.value = 0;
-            }
-            catch (err) {
-                alert('could not create user because of ' + err);
-            }
+        function User(name) {
+            this.name = name;
+            this.id = this.getUserCounter();
+            this.messages = [];
+            this.value = 0;
         }
 
         User.prototype.addMessage = function(text, timestamp) {
             this.messages.append(new Message(text, timestamp));
         };
+
+        User.prototype.getUserCounter = function() {
+            var counter = 0;
+            return function() { return counter++; }
+        }();
 
         function Message(text, timestamp) {
             this.text = text;
@@ -78,16 +75,59 @@
 
         // ---------- HOLD DATA ---------- //
         var model = {
-            init: function() {
-                this.users = {};
-                // links is a nested object representing an adjacency list
-                // i.e. links[id] = {id2: value, id10: value}
-                this.links = {};
+            init: function(data) {
+                var that = this;
+                that.users = {};
+                that.links = [];
+                that.color = d3.scale.category20();
+
+                if (data) {
+                    // read in the data
+                    data.forEach(function(message) {
+                        console.log(that.users);
+                        if (!(message.name in that.users)) {
+                            that.addUser(message.name);
+                        }
+                        var user = that.getUserByName(message.name);
+                        if (user) {
+                            that.addMessage(user.id, message.text, message.timestamp);
+
+                            // assume user sends message to all users currently in room
+                            var users = Object.keys(that.users);
+                            var value = that.computeValue(message.text);
+
+                            users.forEach(function(name) {
+                                that.addLink(user.id, that.users[name].id, value);
+                            });
+                        }
+                    });
+                }
             },
 
-            addUser: function(data) {
-                var user = new User(data);
+            addUser: function(name) {
+                var user = new User(name);
+                user.color = this.color(Math.random());
                 this.users[user.id] = user;
+            },
+
+            removeUser: function(id) {
+                delete this.users.id;
+            },
+
+            getNumUsers: function() {
+                var size = 0;
+                for (var key in this.users) {
+                    if (this.users.hasOwnProperty(key)) size++;
+                }
+                return size;
+            },
+
+            getUserByName: function(name) {
+                for (var id in this.users) {
+                    var user = this.users[id];
+                    if (user.name === name) return user;
+                }
+                return null;
             },
 
             addMessage: function(id, message, timestamp) {
@@ -100,15 +140,28 @@
                 }
             },
 
-            addLink: function(src, targets, value) {
-                value = typeof a !== 'undefined' ? a : 1;
+            addLink: function(src, target, value) {
+                var that = this;
+                var value = typeof value !== 'undefined' ? value : 1;
 
-                var links = this.links[src] ? this.links[src] : {};
+                var from_src = that.links.filter(function(link) { return link.source === src; });
 
-                targets.forEach(function(target) {
-                    if (links.hasOwnProperty(target)) links[target] += value;
-                    else links[target] = value;
+                // update link strength
+                from_src.forEach(function(link) {
+                    if (targets.indexOf(link.target) > 1) {
+                        link.value++;
+                        targets.splice(targets.indexOf(link.target), 1);
+                    }
                 });
+
+                // create new links
+                targets.forEach(function(target) {
+                    that.links.push({source: src, target: target, value: value });
+                });
+            },
+
+            computeValue: function(datum) {
+                return datum.length;
             }
         }
 
@@ -124,9 +177,9 @@
             },
 
             setOrdering: function(ordering) {
-                if this.hasOwnProperty(ordering) this.ordering = ordering;
+                if (this.hasOwnProperty(ordering)) this.ordering = ordering;
                 else console.log('ordering not found');
-            }
+            },
 
             nameOrdering: function() {
                 var obj = model.users,
@@ -160,7 +213,7 @@
                     if (col.id == id) return i;
                 });
                 return null;
-            }
+            },
 
             // create new link or add value to existing link
             newLink: function(src, target, value) {
@@ -176,12 +229,11 @@
         }
 
 
-        function createMatrix(data) {
-
-            // ---------- MATRIX DISPLAY ---------- //
+        function createMatrix(model) {
+            d3.select('#matrix svg').remove();
             var margin = {top: 80, right: 0, bottom: 10, left: 80},
-                width = 720,
-                height = 720;
+                width = 480,
+                height = 480;
 
             var svg = d3.select('#matrix').append('svg')
                 .attr("width", width + margin.left + margin.right)
@@ -190,30 +242,24 @@
                 .append("g")
                 .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-
-            // ---------- SCALES ---------- //
             var x = d3.scale.ordinal().rangeBands([0, width]), // for the position of user
-                z = d3.scale.linear().domain([0, 4]).clamp(true), // for the link strength, only 5 levels
-                c = d3.scale.category10().domain(d3.range(10)); // for the cluster colors
+                z = d3.scale.linear().clamp(true); // for the link strength
 
-            // to hold the data
             var matrix = [],
-                users = data.users,
-                links = data.links,
-                n = data.users.length;
+                users = model.users,
+                links = model.links,
+                n = model.getNumUsers();
 
             // initialize matrix
-            users.forEach(function(user, i) {
+            for (var i=0; i<n; i++) {
                 matrix[i] = d3.range(n).map(function(j) { return {x: j, y: i, z: 0}; });
-            });
+            };
 
             links.forEach(function(link) {
                 matrix[link.source][link.target].z += link.value; // bottom left triangle
-                matrix[link.target][link.source].z += link.value; // top right triangle
-                matrix[link.source][link.source].z += link.value; // node to itself
-                matrix[link.target][link.target].z += link.value; // node to itself
-                users[link.source].count += link.value;
-                users[link.target].count += link.value;
+                // matrix[link.target][link.source].z += link.value; // top right triangle
+                // matrix[link.source][link.source].z += link.value; // node to itself
+                // matrix[link.target][link.target].z += link.value; // node to itself
             })
 
             // ordering of the elements in the matrix
@@ -222,6 +268,7 @@
             })
 
             x.domain(nameOrdering);
+            z.domain([0, d3.max(links, function(link) { return link.value; })]);
 
             svg.append("rect")
                 .attr("class", "background")
@@ -267,11 +314,13 @@
                         .attr("width", x.rangeBand())
                         .attr("height", x.rangeBand())
                         .style("fill-opacity", function(d) { return z(d.z); })
+                        // .style("fill", function(d) { console.log(users[d.x]); return users[d.x].color; })
                         .on("mouseover", mouseover)
                         .on("mouseout", mouseout);
             }
 
             function mouseover(p) {
+                console.log(p);
                 d3.selectAll(".row text").classed("active", function(d, i) { return i == p.y; });
                 d3.selectAll(".column text").classed("active", function(d, i) { return i == p.x; });
             }
@@ -281,9 +330,76 @@
             }
         }
 
+
         // ---------- INITIALIZATION ---------- //
-        model.init();
-        matrix.init();
+        var fakeData = [
+            {
+                name: 'user@i1hYpFrzIW',
+                text: 'Hello',
+                timestamp: new Date('2014-07-24 12:34:53')
+            },
+            {
+                name: 'user@zWAVh7LBNa',
+                text: 'Hi',
+                timestamp: new Date('2014-07-24 12:34:53')
+            },
+            {
+                name: 'user@zWAVh7LBNa',
+                text: 'What are we doing?',
+                timestamp: new Date('2014-07-24 12:34:58')
+            },
+            {
+                name: 'user@i1hYpFrzIW',
+                text: 'I do not know.',
+                timestamp: new Date('2014-07-24 12:35:00')
+            },
+            {
+                name: 'user@i1hYpFrzIW',
+                text: 'Weeeeeeeee',
+                timestamp: new Date('2014-07-24 12:35:05')
+            }
+        ];
+
+        model.init(fakeData);
+        createMatrix(model);
+
+        // timeline callbacks
+        var timeline = d3.select("#timeline");
+        timeline.on('input', function() {
+            var scale = d3.scale.linear().domain([0, timeline.attr('max')]).range([0, model.data.length]);
+
+        });
+
+        // // fake data
+        // model.addUser('Bob');
+        // model.addLink(0, [0], 3);
+        // createMatrix(model);
+
+        // setTimeout(function() {
+        //     model.addUser('Alice');
+        //     model.addLink(0,[0,1], 2);
+        //     createMatrix(model);
+
+        //     setTimeout(function() {
+        //         model.addLink(0,[0, 1], 7);
+        //         model.addUser('Mark');
+        //         model.addLink(1,[0,1,2], 12);
+        //         model.addLink(2, [0,1,2], 30);
+        //         createMatrix(model);
+
+        //         setTimeout(function() {
+        //             model.addUser('Merry');
+        //             model.addLink(1,[0,1,2,3], 12);
+        //             model.addLink(3, [0,1,2,3], 10);
+        //             createMatrix(model);
+        //         }, 2000);
+
+        //     }, 2000);
+
+        // }, 2000);
+
+
+        // matrix.init();
     </script>
 </body>
 </html>
