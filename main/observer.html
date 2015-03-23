@@ -82,7 +82,16 @@
                 // links is a nested object representing an adjacency list
                 // i.e. links[id] = {id2: value, id10: value}
                 this.links = {};
+                this.matrix = [];
             },
+
+            getNumUsers: function() {
+                var size = 0;
+                for (var key in this.users) {
+                    if (this.users.hasOwnProperty(key)) size++;
+                }
+                return size;
+            }
 
             addUser: function(data) {
                 var user = new User(data);
@@ -105,7 +114,7 @@
                 var links = this.links[src] ? this.links[src] : {};
 
                 targets.forEach(function(target) {
-                    if (target in links) links[target] += value;
+                    if (links.hasOwnProperty(target)) links[target] += value;
                     else links[target] = value;
                 });
             }
@@ -129,8 +138,8 @@
 
 
         // ---------- SCALES ---------- //
-        var x = d3.scale.ordinal().rangeBands([0, settings.width]), // for the position of actor
-            z = d3.scale.linear().domain([0, 4]).clamp(true), // for the co-occurences, only 5 shades of opacity
+        var x = d3.scale.ordinal().rangeBands([0, settings.width]), // for the position of user
+            z = d3.scale.linear().domain([0, 4]).clamp(true), // for the link strength, only 5 levels
             c = d3.scale.category10().domain(d3.range(10)); // for the cluster colors
 
 
@@ -234,6 +243,10 @@
             }
             // createMatrix(data);
         });
+
+
+        // ---------- INITIALIZATION ---------- //
+        model.init();
     </script>
 </body>
 </html>
