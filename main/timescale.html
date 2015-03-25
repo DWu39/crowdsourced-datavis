@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+	<style>
+    	body { font-family: "Open Sans"; } div { margin: 30px; }
+    	 #d1 { font-size: 42px;}
+    	 svg { border: solid black 1px;}
+	</style>
+</head>
+<body>
+<input id="s1" type="range" min="0"></input>
+<div id="data" height="1000" width="1000"></div>
+<script>
+    var dataset = [];
+    var timeSliceLength = 20000;
+
+    d3.csv('data/communication.csv', function(data) {
+        dataset =
+        // get only events with messages
+        data.filter(function(d) {
+            var message = JSON.parse(d['message']);
+            return message['type'] === 'comment';
+        })
+        // convert messages from string to json object
+        .map(function(d) {
+            d['message'] = JSON.parse(d['message']);
+            return d;
+        });
+
+        var time_beg = Date.parse(dataset[0].curr),
+            time_end = 0;
+
+        for(var i=0; i<dataset.length; i++ ){
+            var time = Date.parse(dataset[i].curr);
+            if(time_end < time) time_end = time;
+        }
+
+        var range = Math.ceil((time_end - time_beg)/timeSliceLength);
+
+        var slider = d3.select('#s1').attr('max', range);
+
+		slider.on('input', function() {
+            var sliceTimeStart = time_beg + (parseInt(slider.node().value) * timeSliceLength),
+                sliceTimeEnd = sliceTimeStart + timeSliceLength;
+
+            var slicedData = dataset.filter(function(d) {
+                var time = Date.parse(d.curr);
+                return time > sliceTimeStart && time < sliceTimeEnd;
+            })
+            .sort(function(a, b){
+                return Date.parse(a.curr) - Date.parse(b.curr);
+            });
+
+            d3.select("#data").selectAll('p').remove()
+                .data(slicedData).enter()
+                .append('p')
+                .text(function(d) { return d.userId + ' - ' + d.curr + ' - ' + d.message.comment.text; });
+		});
+    });
+
+</script>
+</body>
+</html>

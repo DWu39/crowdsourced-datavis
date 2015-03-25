@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <script src="js/d3.v3.min.js"></script>
+    <script src="js/generateData.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="stylesheet" type="text/css" href="css/styles.css">
 
@@ -26,7 +27,6 @@
 </head>
 <body>
     <div id='matrix'></div>
-    <input id="timeline" type="range" min="0" max="100" value="30"/>
 
     <script>
         // ---------- SOCKET.IO and EVENTS ---------- //
@@ -77,9 +77,9 @@
         var model = {
             init: function(data) {
                 var that = this;
-                that.users = {};
-                that.links = [];
-                that.color = d3.scale.category20();
+                this.users = {};
+                this.links = [];
+                this.color = d3.scale.category20();
 
                 if (data) {
                     // read in the data
@@ -328,74 +328,7 @@
 
 
         // ---------- INITIALIZATION ---------- //
-        var fakeData = [
-            {
-                name: 'user@i1hYpFrzIW',
-                text: 'Hello',
-                timestamp: new Date('2014-07-24 12:34:53')
-            },
-            {
-                name: 'user@zWAVh7LBNa',
-                text: 'Hi',
-                timestamp: new Date('2014-07-24 12:34:53')
-            },
-            {
-                name: 'user@zWAVh7LBNa',
-                text: 'What are we doing?',
-                timestamp: new Date('2014-07-24 12:34:58')
-            },
-            {
-                name: 'user@i1hYpFrzIW',
-                text: 'I do not know.',
-                timestamp: new Date('2014-07-24 12:35:00')
-            },
-            {
-                name: 'user@i1hYpFrzIW',
-                text: 'Weeeeeeeee',
-                timestamp: new Date('2014-07-24 12:35:05')
-            }
-        ];
-
-        model.init(fakeData);
-        createMatrix(model);
-
-        // timeline callbacks
-        var timeline = d3.select("#timeline");
-        timeline.on('input', function() {
-            var scale = d3.scale.linear().domain([0, timeline.attr('max')]).range([0, model.data.length]);
-
-        });
-
-        // fake data
-        model.addUser('Bob');
-        model.addLink(0, [0], 3);
-        createMatrix(model);
-
-        setTimeout(function() {
-            model.addUser('Alice');
-            model.addLink(0,[0,1], 2);
-            createMatrix(model);
-
-            setTimeout(function() {
-                model.addLink(0,[0, 1], 7);
-                model.addUser('Mark');
-                model.addLink(1,[0,1,2], 12);
-                model.addLink(2, [0,1,2], 30);
-                createMatrix(model);
-
-                setTimeout(function() {
-                    model.addUser('Merry');
-                    model.addLink(1,[0,1,2,3], 12);
-                    model.addLink(3, [0,1,2,3], 10);
-                    createMatrix(model);
-                }, 2000);
-
-            }, 2000);
-
-        }, 2000);
-
-
-        // matrix.init();
+        var fakeData = JSON.parse(generateData());
     </script>
 </body>
 </html>
