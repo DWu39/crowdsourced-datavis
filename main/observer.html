@@ -53,7 +53,7 @@
         // ---------- CLASSES ---------- //
         function User(name) {
             this.name = name;
-            this.id = this.getUserCounter();
+            this.id = getUserCounter();
             this.messages = [];
             this.value = 0;
         }
@@ -70,6 +70,140 @@
         function Message(text, timestamp) {
             this.text = text;
             this.timestamp = timestamp;
+        }
+
+
+        // ---------- MVC ---------- //
+        var model = {
+            // initializes model to hold data
+            init: function(data) {
+                this.allData = [];
+                if (data) this.storeInModel(data);
+                // holds the current data being shown in view
+                this.viewModel = [];
+            },
+
+            // reads more data into model
+            storeInModel: function(data) {},
+
+            // store new data in viewModel
+            storeInViewModel: function(dataSlice) {},
+
+            getViewModel: function() { return this.viewModel; }
+        };
+
+        var controller = {
+            init: function(data) {
+                model.init(data);
+                view.init();
+            },
+
+            //
+            sliceData: function() {
+
+            },
+
+            // feed current viewModel into view
+            renderView: function() {
+                var data = model.getViewModel();
+                var matrix = constructMatrix(data);
+                view.render(matrix);
+            }
+        };
+
+        var view = {
+            // create new canvas for matrix to be drawn in
+            init: function() {
+                this.margin = {top: 80, right: 0, bottom: 10, left: 80};
+                this.width = 480;
+                this.height = 480;
+            },
+
+            // draw a new matrix
+            render: function(matrix) {
+                var x = d3.scale.ordinal().rangeBands([0, width]), // scale for the position of user
+                    z = d3.scale.linear().clamp(true), // scale for the link strength
+                    ordering; // how to order users of matrix
+
+                // remove all previous matrix svgs and create new one
+                d3.select('#matrix svg').remove();
+                this.svg = d3.select('#matrix').append('svg')
+                    .attr("width", this.width + this.margin.left + this.margin.right)
+                    .attr("height", this.height + this.margin.top + this.margin.bottom)
+                    .style("margin-left", this.margin.left + "px")
+                    .append("g")
+                    .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
+
+                // order by name default
+                ordering = matrix.ordering ? matrix.ordering : orderByName(matrix.users);
+                x.domain(ordering);
+                z.domain([0, d3.max(matrix.links, function(link) { return link.value; })]);
+
+                // draw matrix rows
+                var row = svg.selectAll(".row")
+                    .data(matrix.matrix).enter()
+                    .append("g")
+                    .attr("class", "row")
+                    .attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
+                    .each(row);
+
+                row.append("line").attr("x2", width);
+
+                row.append("text")
+                    .attr("x", -6)
+                    .attr("y", x.rangeBand() / 2)
+                    .attr("dy", ".32em")
+                    .attr("text-anchor", "end")
+                    .text(function(d, i) { return matrix.users[i].name; });
+
+                //draw matrix columns
+                var column = svg.selectAll(".column")
+                    .data(matrix.matrix).enter()
+                    .append("g")
+                    .attr("class", "column")
+                    .attr("transform", function(d, i) { return "translate(" + x(i) + ")rotate(-90)"; });
+
+                column.append("line").attr("x1", -width);
+
+                column.append("text")
+                      .attr("x", 6)
+                      .attr("y", x.rangeBand() / 2)
+                      .attr("dy", ".32em")
+                      .attr("text-anchor", "start")
+                      .text(function(d, i) { return users[i].name; });
+
+                // fill in matrix with data and add hover effects
+                function row(row) {
+                    var cell = d3.select(this).selectAll(".cell")
+                        .data(row.filter(function(d) { return d.z; }))
+                        .enter().append("rect")
+                            .attr("class", "cell")
+                            .attr("x", function(d) { return x(d.x); })
+                            .attr("width", x.rangeBand())
+                            .attr("height", x.rangeBand())
+                            .style("fill-opacity", function(d) { return z(d.z); })
+                            // .style("fill", function(d) { console.log(users[d.x]); return users[d.x].color; })
+                            .on("mouseover", mouseover)
+                            .on("mouseout", mouseout);
+                }
+
+                function mouseover(p) {
+                    console.log(p);
+                    d3.selectAll(".row text").classed("active", function(d, i) { return i == p.y; });
+                    d3.selectAll(".column text").classed("active", function(d, i) { return i == p.x; });
+                }
+
+                function mouseout() {
+                    d3.selectAll("text").classed("active", false);
+                }
+            },
+
+            // order the elements alphabetically by name
+            orderByName: function(users) {
+                return d3.range(users.length).sort(function(a, b) {
+                    return d3.ascending(users[a].name, users[b].name);
+                });
+            }
         }
 
 
@@ -224,7 +358,6 @@
             }
         }
 
-
         function createMatrix(model) {
             d3.select('#matrix svg').remove();
             var margin = {top: 80, right: 0, bottom: 10, left: 80},
@@ -328,7 +461,105 @@
 
 
         // ---------- INITIALIZATION ---------- //
-        var fakeData = JSON.parse(generateData());
+        var fakeData = JSON.parse(generate.generateData());
+        var padding = 100;
+        var svg = d3.select('#matrix').append('svg').attr('width', 720).attr('height', 720);
+        var x = d3.scale.linear().domain(d3.extent(fakeData, function(d) { return d.action.position.x; })).range([padding, 720-padding]);
+        var y = d3.scale.linear().domain(d3.extent(fakeData, function(d) { return d.action.position.y; })).range([720-padding, padding]);
+        var r = d3.scale.linear().domain(d3.extent(fakeData, function(d) { return d.action.text.length; })).range([0, 720]);
+
+        svg.selectAll('circle')
+           .data(fakeData).enter()
+           .append('circle')
+           .attr('cx', function(d) { return x(d.action.position.x); })
+           .attr('cy', function(d) { return y(d.action.position.y); })
+           .attr('r', function(d) { return Math.sqrt(r(d.action.text.length)); });
+
+        // ---------- FILTERS ---------- //
+        var filtering = function(){
+            return {
+                /**
+                * param d - d3 selection of data
+                * param s - start
+                * param t - end
+                */
+                slice: function(d, s, t) {
+                    return d.filter(function(a) {
+                        return a.action.date >= s && a.action.date <= t;
+                    });
+                },
+
+                /** TODO: not sure if storing in arrays works with D3
+                * param d - d3 selection of data
+                * param l - length of time block
+                * param n - first n events per block (optional)
+                */
+                block: function(d, l, n) {
+                    var blocks = [],
+                        curr = [],
+                        time = l,
+                        d = d.sort(function(a, b) { return d3.ascending(a.action.date, b.action.date); });
+
+                    // split data into blocks
+                    d.each(function(a) {
+                        if (a.action.date <= time) {
+                            if (typeof n === 'undefined') curr.push(a);
+                            else if (curr.length < n) curr.push(a);
+                        } else {
+                            blocks.push(curr);
+                            // shift time block until current event fits
+                            while (a.action.date > time) time += l;
+                            curr = [a];
+                        }
+                    });
+                    blocks.push(curr);
+                    return blocks;
+                },
+
+            };
+        }();
+
+        var allData = d3.selectAll('circle');
+        console.log(filtering.block(allData, 200000, 3));
+        var blocked = filtering.block(allData, 200000, 3);
+
+        // var filtered = filtering.slice(allData, 0, 100000);
+        // console.log(allData.size(), filtered.size());
+        // // filtered.attr('fill', 'red');
+        // allData.data(filtered)
+        //     .attr('fill','red');
+        //     // .exit().remove();
+        // console.log(allData.size());
+
+        // ----------- SORTS ----------- //
+        // TODO: rewrite to use d3 selections
+        var sorting = function(){
+            /**
+            * param d - javascript array of objects
+            * param p - object property
+            * param asc - ascending sorting or not, true by default
+            */
+
+            var byString = function(d, p, asc) {
+                var asc = typeof asc !== 'undefined' ? asc : true,
+                    f = function(a, b) {
+                        if (a.action[p] > b.action[p]) return asc ? 1 : -1;
+                        if (a.action[p] < b.action[p]) return asc ? -1 : 1;
+                        return 0;
+                    };
+                return d.sort(f);
+            };
+
+            return {
+                byName: function(d, asc) { return byString(d, 'name', asc); },
+
+                byLocation: function(d, asc) { return byString(d, 'location', asc); }
+            }
+        }();
+
     </script>
 </body>
 </html>
+
+
+
