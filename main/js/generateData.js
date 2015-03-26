@@ -2,13 +2,13 @@
 
 // ----------- parameters ----------- //
 var numUsers = 5,
-    numObservationsPerUser = 7, // each user emits this number of actions
+    numObservationsPerUser = 10, // each user emits this number of actions
     experimentLength = 600000, // how long experiment lasts in ms
     maxTextLength = 150, // longest message users will send
     width = 480, // width of screen users interact on
     height = 720, // height of screen users interact on
     locations = ['gates hall', 'willard straight', 'olin', 'uris', 'upson', 'duffield', 'statler'],
-    roles = ['undegrad', 'masters', 'phd', 'associate professor', 'senior professor', 'chair'],
+    roles = ['undergrad', 'masters', 'phd', 'associate professor', 'senior professor', 'chair'],
     alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; // for generating random text
 
 

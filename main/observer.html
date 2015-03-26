@@ -477,6 +477,19 @@
 
         // ---------- FILTERS ---------- //
         var filtering = function(){
+
+            /**
+            * param d - d3 selection of data
+            * param s - string to filter by
+            * param p - property holding the string
+            */
+            var byString = function(d, s, p) {
+                return d.filter(function(a) {
+                    if (typeof s === 'string') return a.action[p] === s;
+                    else return s.indexOf(a.action[p]) !== -1;
+                });
+            };
+
             return {
                 /**
                 * param d - d3 selection of data
@@ -516,20 +529,30 @@
                     return blocks;
                 },
 
+                byRole: function(d, r) { return byString(d, r, 'role'); },
+
+                byLocation: function(d, l) { return byString(d, l, 'location'); },
+
+                byText: function(d, t) {
+                    var re = new RegExp(t);
+                    return d.filter(function(a) { return a.action.text.search(re) !== -1; });
+                }
+
+
             };
         }();
 
-        var allData = d3.selectAll('circle');
-        console.log(filtering.block(allData, 200000, 3));
-        var blocked = filtering.block(allData, 200000, 3);
 
-        // var filtered = filtering.slice(allData, 0, 100000);
-        // console.log(allData.size(), filtered.size());
-        // // filtered.attr('fill', 'red');
-        // allData.data(filtered)
-        //     .attr('fill','red');
-        //     // .exit().remove();
-        // console.log(allData.size());
+        var allData = d3.selectAll('circle');
+
+        // console.log(filtering.slice(allData, 0, 100000));
+        // console.log(filtering.block(allData, 200000));
+        // console.log(filtering.block(allData, 200000, 3));
+        // console.log(filtering.byRole(allData, 'undergrad'));
+        // console.log(filtering.byRole(allData, ['undergrad', 'phd']));
+        // console.log(filtering.byLocation(allData, 'upson'));
+        // console.log(filtering.byLocation(allData, ['upson', 'olin']));
+        // console.log(filtering.byText(allData, 'a1'));
 
         // ----------- SORTS ----------- //
         // TODO: rewrite to use d3 selections
