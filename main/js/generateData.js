@@ -39,9 +39,11 @@ function randomRole() {
 
 function randomName() {
     var name = "";
+    // make first letter capitalized
+    name += alphabet.charAt(Math.floor(Math.random() * alphabet.length)).toUpperCase();
     for (var i=0; i<10; i++)
-        text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-    return text;
+        name += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    return name;
 }
 
 function randomText(length) {
@@ -57,10 +59,10 @@ function randomAffect() {
 
 function randomAction() {
     return {
-        affect: randomAffect()
+        affect: randomAffect(),
         date: randomDate(),
         position: randomPosition(),
-        text: randomText(Math.floor(Math.random()*maxTextLength)),
+        text: randomText(Math.floor(Math.random()*maxTextLength))
     }
 }
 

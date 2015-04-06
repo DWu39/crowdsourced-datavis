@@ -51,11 +51,11 @@
 
 
         // ---------- CLASSES ---------- //
-        function User(id, loc, role, name) {
+        function User(id, loc, name, role) {
             this.id = id;
             this.location = loc;
-            this.role = role;
             this.name = name;
+            this.role = role;
             this.actions = [];
             this.value = 0;
         };
@@ -66,17 +66,44 @@
             this.ordering = ordering;
             this.users = data.users;
             this.links = data.links;
-            this.matrix;
+
+            var matrix = [],
+                n = data.numUsers;
+
+            // initialize matrix from top row to bottom row
+            for (var i=0; i<n; i++)
+                matrix[i] = d3.range(n).map(function(j) { return {x: j, y: i, z: 0}; });
+
+            this.links.forEach(function(link) {
+                // filling in only half of triangle, showing a one-sided relationship
+                // i.e. user in row i affects users in columns
+                matrix[link.source][link.target].z += link.value;
+            });
+
+            this.matrix = matrix;
         }
 
 
         // ---------- MVC ---------- //
         var model = {
-            allData: {}, // actions per user
+            // actions per user
+            userData: {},
 
-            viewModel: [], // holds the current data being shown in view
+            // holds the current data being shown in view
+            viewModel: {
+                users: [],
+                links: [],
+                numUsers: 0
+            },
 
+            // starting up/clearing model with fresh data
             init: function(data) {
+                this.userData = {};
+                this.viewModel = {
+                    users: [],
+                    links: [],
+                    numUsers: 0
+                }
                 if (data) this.storeInModel(data);
             },
 
@@ -84,53 +111,71 @@
             storeInModel: function(data) {
                 for (var i=0; i<data.length; i++) {
                     var d = data[i];
-
-                    if (this.allData[d.id] === undefined)
-                        this.allData[d.id] = new User(d.id, d.location, d.role);
-                    this.allData[d.id].addAction(d.action);
+                    if (this.userData[d.id] === undefined)
+                        this.userData[d.id] = new User(d.id, d.location, d.name, d.role);
+                    this.userData[d.id].addAction(d.action);
                 };
             },
 
             // store new data in viewModel
-            storeInViewModel: function(dataSlice) {},
+            storeInViewModel: function(dataSlice) {
+                // load all data into view
+                if (!dataSlice) {
+                    for (var u in this.userData) {
+                        if (this.userData.hasOwnProperty(u))
+                            this.viewModel.users.push(this.userData[u]);
+                    }
+                    // TODO: create links from new data
+                    // recalculates links after reading in new data
+                    var links = [];
+
+                    this.viewModel.links = links;
+                }
+
+                // TODO: read in data by slicing
+                this.viewModel.numUsers = this.viewModel.users.length;
+            },
 
             getViewModel: function() { return this.viewModel; }
         };
 
         var controller = {
-            ordering: this.orderById,
+            getOrdering: this.orderByName, // order by name by default
 
             init: function(data) {
                 model.init(data);
                 view.init();
-            },
-
-            //
-            sliceData: function() {
-
+                this.getOrdering = this.orderByName;
             },
 
             // feed current viewModel into view
             renderView: function() {
                 var data = model.getViewModel();
-                var matrix = new Matrix(data, this.ordering);
-                view.render(matrix, orderByName(data.users));
+                if (data.numUsers === 0) console.log('view is empty');
+                var ordering = this.getOrdering(data.users);
+                var matrix = new Matrix(data, ordering);
+                view.render(matrix);
             },
 
             orderById: function(users) {
-                return d3.range(users.length).sort(function(a, b) {
-                    return d3.ascending(users[a].id, users[b].id);
-                });
+                if (users) {
+                    return d3.range(users.length).sort(function(a, b) {
+                        return d3.ascending(users[a].id, users[b].id);
+                    });
+                }
+                return []
             },
 
-            // order the elements alphabetically by name
             orderByName: function(users) {
-                return d3.range(users.length).sort(function(a, b) {
-                    return d3.ascending(users[a].name, users[b].name);
-                });
+                if (users) {
+                    return d3.range(users.length).sort(function(a, b) {
+                        return d3.ascending(users[a].name, users[b].name);
+                    });
+                }
+                return []
             },
 
-            setOrdering: function(ordering) { this.ordering = ordering; }
+            setOrdering: function(ordering) { this.getOrdering = ordering; }
         };
 
         var view = {
@@ -145,19 +190,20 @@
             render: function(matrix) {
                 // remove all previous matrix svgs and create new one
                 d3.select('#matrix svg').remove();
-                this.svg = d3.select('#matrix').append('svg')
+                var svg = d3.select('#matrix').append('svg')
                     .attr("width", this.width + this.margin.left + this.margin.right)
                     .attr("height", this.height + this.margin.top + this.margin.bottom)
                     .style("margin-left", this.margin.left + "px")
                     .append("g")
                     .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
 
-                var ordering = matrix.ordering, // how to order users of matrix
-                    x = d3.scale.ordinal().rangeBands([0, width]), // scale for the position of user
+                var x = d3.scale.ordinal().rangeBands([0, this.width]), // scale for the position of user
                     z = d3.scale.linear().clamp(true); // scale for the link strength
 
-                x.domain(ordering);
+                x.domain(matrix.ordering);
                 z.domain([0, d3.max(matrix.links, function(link) { return link.value; })]);
+
+                console.log(matrix);
 
                 // draw matrix rows
                 var row = svg.selectAll(".row")
@@ -167,7 +213,7 @@
                     .attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
                     .each(row);
 
-                row.append("line").attr("x2", width);
+                row.append("line").attr("x2", this.width);
 
                 row.append("text")
                     .attr("x", -6)
@@ -183,16 +229,16 @@
                     .attr("class", "column")
                     .attr("transform", function(d, i) { return "translate(" + x(i) + ")rotate(-90)"; });
 
-                column.append("line").attr("x1", -width);
+                column.append("line").attr("x1", -this.width);
 
                 column.append("text")
                       .attr("x", 6)
                       .attr("y", x.rangeBand() / 2)
                       .attr("dy", ".32em")
                       .attr("text-anchor", "start")
-                      .text(function(d, i) { return users[i].name; });
+                      .text(function(d, i) { return matrix.users[i].name; });
 
-                // fill in matrix with data and add hover effects
+                // fill in row with data and add hover effects
                 function row(row) {
                     var cell = d3.select(this).selectAll(".cell")
                         .data(row.filter(function(d) { return d.z; }))
@@ -202,7 +248,6 @@
                             .attr("width", x.rangeBand())
                             .attr("height", x.rangeBand())
                             .style("fill-opacity", function(d) { return z(d.z); })
-                            // .style("fill", function(d) { console.log(users[d.x]); return users[d.x].color; })
                             .on("mouseover", mouseover)
                             .on("mouseout", mouseout);
                 }
@@ -224,7 +269,10 @@
         generate.setNumUsers(5);
         generate.setNumObservations(5);
         var data = generate.generateData(false);
+
         model.storeInModel(data);
+        model.storeInViewModel(); // put all da data in view model
+        controller.renderView();
 
 
         // ---------- FILTERS ---------- //
