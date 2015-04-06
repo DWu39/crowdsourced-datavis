@@ -72,6 +72,11 @@
             this.timestamp = timestamp;
         }
 
+        // function Matrix(data, ordering) {
+        //     this.ordering = typeof ordering == 'undefined' ? ;
+        //     this.users =
+        // }
+
 
         // ---------- MVC ---------- //
         var model = {
@@ -128,10 +133,6 @@
 
             // draw a new matrix
             render: function(matrix) {
-                var x = d3.scale.ordinal().rangeBands([0, width]), // scale for the position of user
-                    z = d3.scale.linear().clamp(true), // scale for the link strength
-                    ordering; // how to order users of matrix
-
                 // remove all previous matrix svgs and create new one
                 d3.select('#matrix svg').remove();
                 this.svg = d3.select('#matrix').append('svg')
@@ -141,8 +142,10 @@
                     .append("g")
                     .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
 
-                // order by name default
-                ordering = matrix.ordering ? matrix.ordering : orderByName(matrix.users);
+                var ordering = matrix.ordering, // how to order users of matrix
+                    x = d3.scale.ordinal().rangeBands([0, width]), // scale for the position of user
+                    z = d3.scale.linear().clamp(true); // scale for the link strength
+
                 x.domain(ordering);
                 z.domain([0, d3.max(matrix.links, function(link) { return link.value; })]);
 
@@ -195,7 +198,6 @@
                 }
 
                 function mouseover(p) {
-                    console.log(p);
                     d3.selectAll(".row text").classed("active", function(d, i) { return i == p.y; });
                     d3.selectAll(".column text").classed("active", function(d, i) { return i == p.x; });
                 }
@@ -206,21 +208,6 @@
             },
         }
 
-
-        // ---------- INITIALIZATION ---------- //
-        var fakeData = JSON.parse(generate.generateData());
-        var padding = 100;
-        var svg = d3.select('#matrix').append('svg').attr('width', 720).attr('height', 720);
-        var x = d3.scale.linear().domain(d3.extent(fakeData, function(d) { return d.action.position.x; })).range([padding, 720-padding]);
-        var y = d3.scale.linear().domain(d3.extent(fakeData, function(d) { return d.action.position.y; })).range([720-padding, padding]);
-        var r = d3.scale.linear().domain(d3.extent(fakeData, function(d) { return d.action.text.length; })).range([0, 720]);
-
-        svg.selectAll('circle')
-           .data(fakeData).enter()
-           .append('circle')
-           .attr('cx', function(d) { return x(d.action.position.x); })
-           .attr('cy', function(d) { return y(d.action.position.y); })
-           .attr('r', function(d) { return Math.sqrt(r(d.action.text.length)); });
 
         // ---------- FILTERS ---------- //
         (function() {
@@ -323,23 +310,8 @@
             }
         })();
 
-        var allData = d3.selectAll('circle');
-
-        // console.log(allData.slice(0, 100000));
-        // console.log(allData.block(200000));
-        // console.log(allData.block(200000, 3));
-        // console.log(allData.filterByRole('undergrad'));
-        // console.log(allData.filterByRole(['undergrad', 'phd']));
-        // console.log(allData.filterByLocation('upson'));
-        // console.log(allData.filterByLocation(['upson', 'olin']));
-        // console.log(allData.filterByText('a1'));
-
-        // allData.filterByLocation('upson').attr('fill', 'red');
-        // allData.filterByLocation('upson').filterByRole('undergrad').attr('fill', 'blue');
-
 
         // ----------- SORTS ----------- //
-        // TODO: rewrite to use d3 selections
        (function(){
             var prototype = d3.selection.prototype;
 
