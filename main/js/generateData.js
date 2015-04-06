@@ -76,7 +76,7 @@ function generateData() {
     }
 
     // sort data by time
-    // allData.sort(function(a, b) { return a.action.date - b.action.date; });
+    allData.sort(function(a, b) { return a.action.date - b.action.date; });
 
     return JSON.stringify(allData);
 }

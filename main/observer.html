@@ -72,24 +72,30 @@
             this.timestamp = timestamp;
         }
 
-        // function Matrix(data, ordering) {
-        //     this.ordering = typeof ordering == 'undefined' ? ;
-        //     this.users =
-        // }
+        function Matrix(data, ordering) {
+            this.ordering = ordering;
+            this.users = data.users;
+            this.links = data.links;
+            this.matrix;
+        }
 
 
         // ---------- MVC ---------- //
         var model = {
-            // initializes model to hold data
+            allData: [],
+
+            viewModel: [], // holds the current data being shown in view
+
             init: function(data) {
-                this.allData = [];
                 if (data) this.storeInModel(data);
-                // holds the current data being shown in view
-                this.viewModel = [];
             },
 
             // reads more data into model
-            storeInModel: function(data) {},
+            storeInModel: function(data) {
+                data.forEach(function(d) {
+                    console.log(d);
+                });
+            },
 
             // store new data in viewModel
             storeInViewModel: function(dataSlice) {},
@@ -98,6 +104,8 @@
         };
 
         var controller = {
+            ordering: this.orderByName,
+
             init: function(data) {
                 model.init(data);
                 view.init();
@@ -111,7 +119,7 @@
             // feed current viewModel into view
             renderView: function() {
                 var data = model.getViewModel();
-                var matrix = new Matrix(data);
+                var matrix = new Matrix(data, this.ordering);
                 view.render(matrix, orderByName(data.users));
             },
 
@@ -120,7 +128,9 @@
                 return d3.range(users.length).sort(function(a, b) {
                     return d3.ascending(users[a].name, users[b].name);
                 });
-            }
+            },
+
+            setOrdering: function(ordering) { this.ordering = ordering; }
         };
 
         var view = {
@@ -206,8 +216,11 @@
                     d3.selectAll("text").classed("active", false);
                 }
             },
-        }
+        };
 
+
+        // ---------- INITIALIZE ---------- //
+        generate.generateData();
 
         // ---------- FILTERS ---------- //
         (function() {
