@@ -50,7 +50,7 @@
         });
 
 
-        // ---------- CLASSES ---------- //
+        // ---------- CLASSES/HELPERS ---------- //
         function User(id, loc, name, role) {
             this.id = id;
             this.location = loc;
@@ -83,6 +83,11 @@
             this.matrix = matrix;
         }
 
+        function computeLinks(data) {
+            console.log(data);
+            return [];
+        }
+
 
         // ---------- MVC ---------- //
         var model = {
@@ -111,29 +116,26 @@
             storeInModel: function(data) {
                 for (var i=0; i<data.length; i++) {
                     var d = data[i];
-                    if (this.userData[d.id] === undefined)
+                    if (this.userData[d.id] === undefined) {
                         this.userData[d.id] = new User(d.id, d.location, d.name, d.role);
+                    }
                     this.userData[d.id].addAction(d.action);
                 };
             },
 
             // store new data in viewModel
-            storeInViewModel: function(dataSlice) {
-                // load all data into view
-                if (!dataSlice) {
-                    for (var u in this.userData) {
-                        if (this.userData.hasOwnProperty(u))
-                            this.viewModel.users.push(this.userData[u]);
-                    }
-                    // TODO: create links from new data
-                    // recalculates links after reading in new data
-                    var links = [];
+            storeInViewModel: function(data) {
+                var data = typeof data === 'undefined' ? this.userData : data; // load all data by default
 
-                    this.viewModel.links = links;
+                var users = [];
+                for (var u in data) {
+                    if (data.hasOwnProperty(u))
+                        users.push(data[u]);
                 }
 
-                // TODO: read in data by slicing
-                this.viewModel.numUsers = this.viewModel.users.length;
+                this.viewModel.users = users;
+                this.viewModel.links = computeLinks(data); // recalculates links after reading in new data
+                this.viewModel.numUsers = users.length;
             },
 
             getViewModel: function() { return this.viewModel; }
