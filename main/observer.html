@@ -51,26 +51,16 @@
 
 
         // ---------- CLASSES ---------- //
-        function User(name) {
+        function User(id, loc, role, name) {
+            this.id = id;
+            this.location = loc;
+            this.role = role;
             this.name = name;
-            this.id = getUserCounter();
-            this.messages = [];
+            this.actions = [];
             this.value = 0;
         };
 
-        User.prototype.addMessage = function(text, timestamp) {
-            this.messages.append(new Message(text, timestamp));
-        };
-
-        User.prototype.getUserCounter = function() {
-            var counter = 0;
-            return function() { return counter++; }
-        }();
-
-        function Message(text, timestamp) {
-            this.text = text;
-            this.timestamp = timestamp;
-        }
+        User.prototype.addAction = function(action) { this.actions.push(action); }
 
         function Matrix(data, ordering) {
             this.ordering = ordering;
@@ -82,7 +72,7 @@
 
         // ---------- MVC ---------- //
         var model = {
-            allData: [],
+            allData: {}, // actions per user
 
             viewModel: [], // holds the current data being shown in view
 
@@ -92,9 +82,13 @@
 
             // reads more data into model
             storeInModel: function(data) {
-                data.forEach(function(d) {
-                    console.log(d);
-                });
+                for (var i=0; i<data.length; i++) {
+                    var d = data[i];
+
+                    if (this.allData[d.id] === undefined)
+                        this.allData[d.id] = new User(d.id, d.location, d.role);
+                    this.allData[d.id].addAction(d.action);
+                };
             },
 
             // store new data in viewModel
@@ -104,7 +98,7 @@
         };
 
         var controller = {
-            ordering: this.orderByName,
+            ordering: this.orderById,
 
             init: function(data) {
                 model.init(data);
@@ -121,6 +115,12 @@
                 var data = model.getViewModel();
                 var matrix = new Matrix(data, this.ordering);
                 view.render(matrix, orderByName(data.users));
+            },
+
+            orderById: function(users) {
+                return d3.range(users.length).sort(function(a, b) {
+                    return d3.ascending(users[a].id, users[b].id);
+                });
             },
 
             // order the elements alphabetically by name
@@ -220,7 +220,12 @@
 
 
         // ---------- INITIALIZE ---------- //
-        generate.generateData();
+        controller.init();
+        generate.setNumUsers(5);
+        generate.setNumObservations(5);
+        var data = generate.generateData(false);
+        model.storeInModel(data);
+
 
         // ---------- FILTERS ---------- //
         (function() {

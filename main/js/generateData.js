@@ -37,11 +37,17 @@ function randomRole() {
     return getRandom(roles);
 }
 
+function randomName() {
+    var name = "";
+    for (var i=0; i<10; i++)
+        text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    return text;
+}
+
 function randomText(length) {
     var text = "";
-    for( var i=0; i < length; i++ ) {
+    for (var i=0; i<length; i++)
         text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-    }
     return text;
 }
 
@@ -51,18 +57,16 @@ function randomAffect() {
 
 function randomAction() {
     return {
+        affect: randomAffect()
         date: randomDate(),
         position: randomPosition(),
-        location: randomLocation(),
-        role: randomRole(),
         text: randomText(Math.floor(Math.random()*maxTextLength)),
-        affect: randomAffect()
     }
 }
 
 
 // ----------- main function ----------- //
-function generateData() {
+function generateData(returnString) {
     var allData = [];
 
     // generate random actions for each user
@@ -70,7 +74,10 @@ function generateData() {
         for (var o=0; o<numObservationsPerUser; o++) {
             allData.push({
                 id: u,
-                action: randomAction()
+                action: randomAction(),
+                location: randomLocation(),
+                name: randomName(),
+                role: randomRole()
             });
         }
     }
@@ -78,7 +85,7 @@ function generateData() {
     // sort data by time
     allData.sort(function(a, b) { return a.action.date - b.action.date; });
 
-    return JSON.stringify(allData);
+    return returnString ? JSON.stringify(allData) : allData;
 }
 
 
