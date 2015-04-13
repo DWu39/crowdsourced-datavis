@@ -26,27 +26,6 @@
     <input id='timeline' type='range' min='0'></input>
 
     <script>
-        // ---------- SOCKET.IO and EVENTS ---------- //
-        var io = io();
-
-        // TODO: get all other sockets and initialize model
-        io.emit('observerConnect', function(data) {
-            // store data in model and initialize matrix
-        });
-
-        // TODO: receive a draw event
-        io.on('drawCircle', function(data) {
-            console.log(data);
-            // update the model
-            // update the matrix
-        });
-
-        // TODO: catch new connections
-        io.on('newConnection', function(conn) {
-            console.log(conn);
-        });
-
-
         // ---------- CLASSES/HELPERS ---------- //
         function User(id, loc, name, role) {
             this.id = id;
