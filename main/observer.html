@@ -16,10 +16,6 @@
             stroke: #fff;
         }
 
-        text.active {
-            fill: red;
-        }
-
         *{
             font-size: 10px;
         }
@@ -27,6 +23,7 @@
 </head>
 <body>
     <div id='matrix'></div>
+    <input id='timeline' type='range' min='0'></input>
 
     <script>
         // ---------- SOCKET.IO and EVENTS ---------- //
@@ -57,12 +54,18 @@
             this.name = name;
             this.role = role;
             this.actions = [];
-            this.value = 0;
+            this.color = this.getRandomColor();
         };
 
         User.prototype.addAction = function(action) { this.actions.push(action); }
 
+        User.prototype.getRandomColor = function() {
+            var color = d3.scale.category10();
+            return function() { return color(Math.random()); }
+        }();
+
         function Matrix(data, ordering) {
+            console.log(data);
             this.ordering = ordering;
             this.users = data.users;
             this.links = data.links;
@@ -74,18 +77,39 @@
             for (var i=0; i<n; i++)
                 matrix[i] = d3.range(n).map(function(j) { return {x: j, y: i, z: 0}; });
 
-            this.links.forEach(function(link) {
+            console.log(data.links);
+            data.links.forEach(function(link) {
+                console.log(link);
+                var source = link.source.id,
+                    target = link.target.id;
                 // filling in only half of triangle, showing a one-sided relationship
                 // i.e. user in row i affects users in columns
-                matrix[link.source][link.target].z += link.value;
+                matrix[source][target].z += link.value;
+                if (source !== target)
+                    matrix[source][source].z += link.value;
             });
-
+            console.log('done');
             this.matrix = matrix;
         }
 
-        function computeLinks(data) {
-            console.log(data);
-            return [];
+        // TODO: how to compute link values?
+        function computeLinks(users) {
+            var links = [];
+
+            for (var u in users) {
+                var actions = users[u].actions;
+                actions.forEach(function(action) {
+                    var val = action.affect,
+                        randomIndex = Math.floor(Math.random()*Object.keys(users).length);
+                    links.push({
+                        source: users[u],
+                        target: users[randomIndex],
+                        value: val
+                    });
+                });
+            }
+            console.log(links);
+            return links;
         }
 
 
@@ -102,14 +126,13 @@
             },
 
             // starting up/clearing model with fresh data
-            init: function(data) {
+            init: function() {
                 this.userData = {};
                 this.viewModel = {
                     users: [],
                     links: [],
                     numUsers: 0
                 }
-                if (data) this.storeInModel(data);
             },
 
             // reads more data into model
@@ -124,35 +147,36 @@
             },
 
             // store new data in viewModel
-            storeInViewModel: function(data) {
-                var data = typeof data === 'undefined' ? this.userData : data; // load all data by default
+            storeInViewModel: function(userData) {
+                var data = typeof userData === 'undefined' ? this.userData : userData; // load all data by default
 
                 var users = [];
                 for (var u in data) {
                     if (data.hasOwnProperty(u))
                         users.push(data[u]);
                 }
-
                 this.viewModel.users = users;
                 this.viewModel.links = computeLinks(data); // recalculates links after reading in new data
                 this.viewModel.numUsers = users.length;
             },
-
-            getViewModel: function() { return this.viewModel; }
         };
 
         var controller = {
             getOrdering: this.orderByName, // order by name by default
 
-            init: function(data) {
-                model.init(data);
+            init: function(data, ordering) {
+                model.init();
                 view.init();
-                this.getOrdering = this.orderByName;
+                this.getOrdering = ordering ? ordering : this.orderByName;
+
+                if (data)
+                    model.storeInModel(data);
+                    model.storeInViewModel();
             },
 
             // feed current viewModel into view
             renderView: function() {
-                var data = model.getViewModel();
+                var data = model.viewModel;
                 if (data.numUsers === 0) console.log('view is empty');
                 var ordering = this.getOrdering(data.users);
                 var matrix = new Matrix(data, ordering);
@@ -183,7 +207,7 @@
         var view = {
             // create new canvas for matrix to be drawn in
             init: function() {
-                this.margin = {top: 80, right: 0, bottom: 10, left: 80};
+                this.margin = {top: 100, right: 0, bottom: 0, left: 100};
                 this.width = 480;
                 this.height = 480;
             },
@@ -199,19 +223,20 @@
                     .append("g")
                     .attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
 
-                var x = d3.scale.ordinal().rangeBands([0, this.width]), // scale for the position of user
-                    z = d3.scale.linear().clamp(true); // scale for the link strength
+                var x = d3.scale.ordinal() // scale for the position of user
+                          .domain(matrix.ordering)
+                          .rangeBands([0, this.width]);
 
-                x.domain(matrix.ordering);
-                z.domain([0, d3.max(matrix.links, function(link) { return link.value; })]);
-
-                console.log(matrix);
+                var z = d3.scale.linear() // scale for the link strength
+                          .domain([0, d3.max(matrix.links, function(link) { return link.value; })])
+                          .clamp(true);
 
                 // draw matrix rows
                 var row = svg.selectAll(".row")
                     .data(matrix.matrix).enter()
                     .append("g")
                     .attr("class", "row")
+                    .style('fill', function(d, i) { return matrix.users[i].color })
                     .attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
                     .each(row);
 
@@ -223,6 +248,21 @@
                     .attr("dy", ".32em")
                     .attr("text-anchor", "end")
                     .text(function(d, i) { return matrix.users[i].name; });
+
+                // fill in row with data and add hover effects
+                function row(row) {
+                    var cell = d3.select(this).selectAll(".cell")
+                        .data(row.filter(function(d) { return d.z; }))
+                        .data(row)
+                        .enter().append("rect")
+                            .attr("class", "cell")
+                            .attr("x", function(d) { return x(d.x); })
+                            .attr("width", x.rangeBand())
+                            .attr("height", x.rangeBand())
+                            .style("fill-opacity", function(d) { return z(d.z); })
+                            .on("mouseover", mouseover)
+                            .on("mouseout", mouseout);
+                }
 
                 //draw matrix columns
                 var column = svg.selectAll(".column")
@@ -238,28 +278,17 @@
                       .attr("y", x.rangeBand() / 2)
                       .attr("dy", ".32em")
                       .attr("text-anchor", "start")
+                      .style('fill', function(d, i) { return matrix.users[i].color })
                       .text(function(d, i) { return matrix.users[i].name; });
-
-                // fill in row with data and add hover effects
-                function row(row) {
-                    var cell = d3.select(this).selectAll(".cell")
-                        .data(row.filter(function(d) { return d.z; }))
-                        .enter().append("rect")
-                            .attr("class", "cell")
-                            .attr("x", function(d) { return x(d.x); })
-                            .attr("width", x.rangeBand())
-                            .attr("height", x.rangeBand())
-                            .style("fill-opacity", function(d) { return z(d.z); })
-                            .on("mouseover", mouseover)
-                            .on("mouseout", mouseout);
-                }
 
                 function mouseover(p) {
                     d3.selectAll(".row text").classed("active", function(d, i) { return i == p.y; });
                     d3.selectAll(".column text").classed("active", function(d, i) { return i == p.x; });
+                    d3.selectAll('.active').transition().style('font-size', 15);
                 }
 
                 function mouseout() {
+                    d3.selectAll('.active').transition().style('font-size', 10);
                     d3.selectAll("text").classed("active", false);
                 }
             },
@@ -267,14 +296,19 @@
 
 
         // ---------- INITIALIZE ---------- //
-        controller.init();
-        generate.setNumUsers(5);
+        // set up random data
+        generate.setNumUsers(10);
         generate.setNumObservations(5);
         var data = generate.generateData(false);
 
-        model.storeInModel(data);
-        model.storeInViewModel(); // put all da data in view model
+        // store all data in model and all data in view model
+        controller.init(data);
+
+        // render martrix
         controller.renderView();
+
+        // init timeline
+        renderTimeline(data, 100000);
 
 
         // ---------- FILTERS ---------- //
@@ -406,8 +440,37 @@
             prototype.sortByLocation = function(asc) {
                 asc = typeof asc !== 'undefined' ? asc : true;
                 return sortByString(this, 'location', asc);
-            }
+            };
+
+            prototype.sortByTime = function(asc) {
+                var asc = typeof asc !== 'undefined' ? asc : true;
+                    f = function(a, b) { return a.action.date - b.action.date; };
+                return data.sort(f);
+            };
         })();
+
+    function renderTimeline(data, defaultLength) {
+        // sort data by time
+        var data = data.sort(function(a, b) { return a.action.date - b.action.date; });
+
+        var time_beg = data[0].action.date,
+            time_end = data[data.length - 1].action.date,
+            numSlices = Math.floor(( time_end - time_beg)/defaultLength);
+
+        var slider = d3.select('#timeline').attr('max', numSlices);
+
+        slider.on('input', function() {
+            var sliceStart = time_beg + (parseInt(slider.node().value) * defaultLength),
+                sliceEnd = sliceStart + defaultLength;
+
+            var slice = data
+            .filter(function(d) { return d.action.date >= sliceStart && d.action.date < sliceEnd; })
+            .sort(function(a, b) { return a.action.date - b.action.date; });
+
+            controller.init(slice);
+            controller.renderView();
+        });
+    };
 
     </script>
 </body>
