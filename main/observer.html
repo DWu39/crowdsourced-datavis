@@ -23,134 +23,136 @@
             this.name = name;
             this.role = role;
             this.actions = [];
-            this.color = this.getRandomColor();
         };
 
         User.prototype.addAction = function(action) { this.actions.push(action); }
 
-        User.prototype.getRandomColor = function() {
-            var color = d3.scale.category10();
-            return function() { return color(Math.random()); }
-        }();
-
-        function Matrix(data, ordering) {
-            console.log(data);
+        /**
+        * Constructs a matrix object that can be rendered by view.
+        * requires: [Object] viewModel to render
+        *           [Array] an ordering of user ids for the view to render
+        */
+        function Matrix(viewModel, ordering) {
+            this.users = viewModel.users;
+            this.links = viewModel.links;
             this.ordering = ordering;
-            this.users = data.users;
-            this.links = data.links;
 
             var matrix = [],
-                n = data.numUsers;
+                n = controller.getNumUsers();
 
             // initialize matrix from top row to bottom row
             for (var i=0; i<n; i++)
+                // look up on global allUsers
+                // d3.range(m)
                 matrix[i] = d3.range(n).map(function(j) { return {x: j, y: i, z: 0}; });
 
-            console.log(data.links);
-            data.links.forEach(function(link) {
-                console.log(link);
+            viewModel.links.forEach(function(link) {
                 var source = link.source.id,
                     target = link.target.id;
-                // filling in only half of triangle, showing a one-sided relationship
-                // i.e. user in row i affects users in columns
-                matrix[source][target].z += link.value;
-                if (source !== target)
-                    matrix[source][source].z += link.value;
+
+                matrix[source][target].z += link.value; // user in row i affects users in columns
+                if (source !== target) matrix[source][source].z += link.value; // reflexive property
             });
-            console.log('done');
+
             this.matrix = matrix;
         }
 
-        // TODO: how to compute link values?
-        function computeLinks(users) {
+        /**
+        * Creates Link objects given a set of users and their actions.
+        * Can use Jaccard, Euclidean distance
+        * requires: [Object] users: user id --> User object
+        *           [string] similarity: which sim function to use in switch case
+        */
+        function computeLinks(users, similarity) {
             var links = [];
 
             for (var u in users) {
-                var actions = users[u].actions;
-                actions.forEach(function(action) {
-                    var val = action.affect,
-                        randomIndex = Math.floor(Math.random()*Object.keys(users).length);
+                users[u].actions.forEach(function(action) {
+                    var val = action.affect;
+
                     links.push({
                         source: users[u],
-                        target: users[randomIndex],
+                        target: randomProperty(users),
                         value: val
                     });
                 });
             }
-            console.log(links);
             return links;
         }
+
+        // grab random property of object
+        var randomProperty = function (obj) {
+            var keys = Object.keys(obj)
+            return obj[keys[ keys.length * Math.random() << 0]]; // shift bit to floor
+        };
 
 
         // ---------- MVC ---------- //
         var model = {
-            // actions per user
-            userData: {},
-
-            // holds the current data being shown in view
-            viewModel: {
-                users: [],
-                links: [],
-                numUsers: 0
-            },
-
             // starting up/clearing model with fresh data
             init: function() {
-                this.userData = {};
-                this.viewModel = {
-                    users: [],
-                    links: [],
-                    numUsers: 0
-                }
+                this.store = []; // stores all datapoints
+
+                this.users = []; // list of user ids
+
+                this.viewModel = { // holds the current data being shown in view
+                    users: {}, // user id to User objects and their actions
+                    links: []
+                };
             },
 
-            // reads more data into model
+            // Reads more data into model.
+            // requires: list of data points
             storeInModel: function(data) {
+                // store each data point and list of user ids in data
                 for (var i=0; i<data.length; i++) {
                     var d = data[i];
-                    if (this.userData[d.id] === undefined) {
-                        this.userData[d.id] = new User(d.id, d.location, d.name, d.role);
-                    }
-                    this.userData[d.id].addAction(d.action);
+                    this.store.push(d);
+                    if (this.users.indexOf(d.id) === -1)
+                        this.users.push(d.id);
                 };
             },
 
             // store new data in viewModel
-            storeInViewModel: function(userData) {
-                var data = typeof userData === 'undefined' ? this.userData : userData; // load all data by default
+            // requires: list of data points
+            storeInViewModel: function(data) {
+                // construct set of user objects
+                for (var i=0; i<data.length; i++) {
+                    var d = data[i];
 
-                var users = [];
-                for (var u in data) {
-                    if (data.hasOwnProperty(u))
-                        users.push(data[u]);
-                }
-                this.viewModel.users = users;
-                this.viewModel.links = computeLinks(data); // recalculates links after reading in new data
-                this.viewModel.numUsers = users.length;
+                    if (typeof this.viewModel.users[d.id] === 'undefined')
+                        this.viewModel.users[d.id] = new User(d.id, d.location, d.name, d.role);
+
+                    this.viewModel.users[d.id].addAction(d.action);
+                };
+                this.viewModel.links = computeLinks(this.viewModel.users);
             },
         };
 
         var controller = {
-            getOrdering: this.orderByName, // order by name by default
-
-            init: function(data, ordering) {
+            init: function(ordering) {
                 model.init();
                 view.init();
-                this.getOrdering = ordering ? ordering : this.orderByName;
+                this.getOrdering = ordering ? ordering : this.orderByName; // order by name by default
+            },
 
-                if (data)
-                    model.storeInModel(data);
-                    model.storeInViewModel();
+            // load more data into model
+            storeModel: function(data) { model.storeInModel(data); },
+
+            // set the data to be displayed in view model
+            storeViewModel: function(data) {
+                var data = typeof data === 'undefined' ? model.store : data; // load all data by default
+                model.storeInViewModel(data);
             },
 
             // feed current viewModel into view
             renderView: function() {
-                var data = model.viewModel;
-                if (data.numUsers === 0) console.log('view is empty');
-                var ordering = this.getOrdering(data.users);
-                var matrix = new Matrix(data, ordering);
+                var ordering = this.getOrdering(model.viewModel.users);
+                var matrix = new Matrix(model.viewModel, ordering);
                 view.render(matrix);
             },
+
+            getNumUsers: function() { return model.users.length; },
 
             orderById: function(users) {
                 if (users) {
@@ -198,14 +200,13 @@
 
                 var z = d3.scale.linear() // scale for the link strength
                           .domain([0, d3.max(matrix.links, function(link) { return link.value; })])
-                          .clamp(true);
+                          .range(['white', 'red']);
 
                 // draw matrix rows
                 var row = svg.selectAll(".row")
                     .data(matrix.matrix).enter()
                     .append("g")
                     .attr("class", "row")
-                    .style('fill', function(d, i) { return matrix.users[i].color })
                     .attr("transform", function(d, i) { return "translate(0," + x(i) + ")"; })
                     .each(row);
 
@@ -228,7 +229,7 @@
                             .attr("x", function(d) { return x(d.x); })
                             .attr("width", x.rangeBand())
                             .attr("height", x.rangeBand())
-                            .style("fill-opacity", function(d) { return z(d.z); })
+                            .style('fill', function(d) { return z(d.z); })
                             .on("mouseover", mouseover)
                             .on("mouseout", mouseout);
                 }
@@ -247,7 +248,6 @@
                       .attr("y", x.rangeBand() / 2)
                       .attr("dy", ".32em")
                       .attr("text-anchor", "start")
-                      .style('fill', function(d, i) { return matrix.users[i].color })
                       .text(function(d, i) { return matrix.users[i].name; });
 
                 function mouseover(p) {
@@ -262,23 +262,6 @@
                 }
             },
         };
-
-
-        // ---------- INITIALIZE ---------- //
-        // set up random data
-        generate.setNumUsers(10);
-        generate.setNumObservations(5);
-        var data = generate.generateData(false);
-
-        // store all data in model and all data in view model
-        controller.init(data);
-
-        // render martrix
-        controller.renderView();
-
-        // init timeline
-        renderTimeline(data, 100000);
-
 
         // ---------- FILTERS ---------- //
         (function() {
@@ -325,7 +308,9 @@
                 var blocks = [],
                     curr = [],
                     time = len,
-                    data = this.sort(function(a, b) { return d3.ascending(a.action.date, b.action.date); });
+                    data = this.sort(function(a, b) {
+                        return d3.ascending(a.action.date, b.action.date);
+                    });
 
                 // split data into blocks
                 data.each(function(d) {
@@ -418,29 +403,49 @@
             };
         })();
 
-    function renderTimeline(data, defaultLength) {
-        // sort data by time
-        var data = data.sort(function(a, b) { return a.action.date - b.action.date; });
 
-        var time_beg = data[0].action.date,
-            time_end = data[data.length - 1].action.date,
-            numSlices = Math.floor(( time_end - time_beg)/defaultLength);
+        // ----------- TIMELINE ----------- //
+        function renderTimeline(data, defaultLength) {
+            // sort data by time
+            var data = data.sort(function(a, b) { return a.action.date - b.action.date; });
 
-        var slider = d3.select('#timeline').attr('max', numSlices);
+            var time_beg = data[0].action.date,
+                time_end = data[data.length - 1].action.date,
+                numSlices = Math.floor(( time_end - time_beg)/defaultLength);
 
-        slider.on('input', function() {
-            var sliceStart = time_beg + (parseInt(slider.node().value) * defaultLength),
-                sliceEnd = sliceStart + defaultLength;
+            var slider = d3.select('#timeline').attr('max', numSlices);
 
-            var slice = data
-            .filter(function(d) { return d.action.date >= sliceStart && d.action.date < sliceEnd; })
-            .sort(function(a, b) { return a.action.date - b.action.date; });
+            slider.on('input', function() {
+                var sliceStart = time_beg + (parseInt(slider.node().value) * defaultLength),
+                    sliceEnd = sliceStart + defaultLength;
 
-            controller.init(slice);
-            controller.renderView();
-        });
-    };
+                var slice = data
+                .filter(function(d) { return d.action.date >= sliceStart && d.action.date < sliceEnd; })
+                .sort(function(a, b) { return a.action.date - b.action.date; });
 
+                // store in view model
+                controller.setViewModel(slice);
+                controller.renderView();
+            });
+        };
+
+
+        // ---------- INITIALIZE ---------- //
+        // set up random data
+        generate.setNumUsers(5);
+        generate.setNumObservations(1);
+        var data = generate.generateData(false);
+
+        // store all data in model and all data in view model
+        controller.init();
+        controller.storeModel(data);
+        controller.storeViewModel(data);
+
+        // render martrix
+        controller.renderView();
+
+        // init timeline
+        renderTimeline(data, 100000);
     </script>
 </body>
 </html>
