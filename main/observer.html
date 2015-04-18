@@ -13,7 +13,7 @@
 </head>
 <body>
     <div id='matrix'></div>
-    <input id='timeline' type='range' min='0'></input>
+    <input id='timeline' type='range' min='0' value='0'></input>
 
     <script>
         // ---------- CLASSES/HELPERS ---------- //
@@ -93,7 +93,7 @@
             init: function() {
                 this.store = []; // stores all datapoints
 
-                this.users = []; // list of user ids
+                this.users = {}; // user ids --> User objects
 
                 this.viewModel = { // holds the current data being shown in view
                     users: {}, // user id to User objects and their actions
@@ -108,32 +108,38 @@
                 for (var i=0; i<data.length; i++) {
                     var d = data[i];
                     this.store.push(d);
-                    if (this.users.indexOf(d.id) === -1)
-                        this.users.push(d.id);
+
+                    // store User object but not their actions
+                    if (!this.users[d.id])
+                        this.users[d.id] = new User(d.id, d.location, d.name, d.role);
                 };
             },
 
-            // store new data in viewModel
+            // store new set of data in viewModel
             // requires: list of data points
             storeInViewModel: function(data) {
-                // construct set of user objects
-                for (var i=0; i<data.length; i++) {
-                    var d = data[i];
+                var users = {},
+                    allIds = Object.keys(this.getUsers());
 
-                    if (typeof this.viewModel.users[d.id] === 'undefined')
-                        this.viewModel.users[d.id] = new User(d.id, d.location, d.name, d.role);
+                allIds.forEach(function(id) { if (!users[id]) users[id] = this.getUser(id); });
 
-                    this.viewModel.users[d.id].addAction(d.action);
-                };
-                this.viewModel.links = computeLinks(this.viewModel.users);
+                data.forEach(function(d) { users[d.id].addAction(d.action); });
+
+                this.viewModel.links = computeLinks(users);
+
+                console.log(users);
+                this.viewModel.users = users;
             },
+
+            getUser: function(id) { return this.users[id]; },
+            getUsers: function() { return this.users; },
+            getNumUsers: function() { return Object.keys(this.users).length; }
         };
 
         var controller = {
-            init: function(ordering) {
+            init: function() {
                 model.init();
                 view.init();
-                this.getOrdering = ordering ? ordering : this.orderByName; // order by name by default
             },
 
             // load more data into model
@@ -146,33 +152,40 @@
             },
 
             // feed current viewModel into view
-            renderView: function() {
-                var ordering = this.getOrdering(model.viewModel.users);
-                var matrix = new Matrix(model.viewModel, ordering);
+            // requires: [function] an ordering function for the users
+            renderView: function(ordering) {
+                var order = this.getOrdering(model.getUsers(), ordering); // get an ordering for all users
+                var matrix = new Matrix(model.viewModel, order);
                 view.render(matrix);
             },
 
-            getNumUsers: function() { return model.users.length; },
+            getNumUsers: function() { return model.getNumUsers(); },
 
             orderById: function(users) {
-                if (users) {
+                if (users)
                     return d3.range(users.length).sort(function(a, b) {
                         return d3.ascending(users[a].id, users[b].id);
                     });
-                }
-                return []
+                else return []
             },
 
             orderByName: function(users) {
-                if (users) {
+                if (users)
                     return d3.range(users.length).sort(function(a, b) {
                         return d3.ascending(users[a].name, users[b].name);
                     });
-                }
-                return []
+                else return []
             },
 
-            setOrdering: function(ordering) { this.getOrdering = ordering; }
+            // requires: [Object] set of User objects to order
+            //           [function] one of the ordering functions
+            // returns: [Array] mapping of index --> user id
+            getOrdering: function(users, ordering) {
+                // convert set of users to list of user objects
+                var ordering = typeof ordering === 'undefined' ? this.orderByName : ordering;
+                var users = Object.keys(users).map(function(id) { return users[id]; });
+                return ordering(users);
+            }
         };
 
         var view = {
@@ -187,6 +200,7 @@
             render: function(matrix) {
                 // remove all previous matrix svgs and create new one
                 d3.select('#matrix svg').remove();
+
                 var svg = d3.select('#matrix').append('svg')
                     .attr("width", this.width + this.margin.left + this.margin.right)
                     .attr("height", this.height + this.margin.top + this.margin.bottom)
@@ -201,6 +215,8 @@
                 var z = d3.scale.linear() // scale for the link strength
                           .domain([0, d3.max(matrix.links, function(link) { return link.value; })])
                           .range(['white', 'red']);
+
+                console.log(matrix);
 
                 // draw matrix rows
                 var row = svg.selectAll(".row")
@@ -405,7 +421,7 @@
 
 
         // ----------- TIMELINE ----------- //
-        function renderTimeline(data, defaultLength) {
+        function initTimeline(data, defaultLength) {
             // sort data by time
             var data = data.sort(function(a, b) { return a.action.date - b.action.date; });
 
@@ -424,7 +440,7 @@
                 .sort(function(a, b) { return a.action.date - b.action.date; });
 
                 // store in view model
-                controller.setViewModel(slice);
+                controller.storeViewModel(slice);
                 controller.renderView();
             });
         };
@@ -432,7 +448,7 @@
 
         // ---------- INITIALIZE ---------- //
         // set up random data
-        generate.setNumUsers(5);
+        generate.setNumUsers(10);
         generate.setNumObservations(1);
         var data = generate.generateData(false);
 
@@ -445,7 +461,7 @@
         controller.renderView();
 
         // init timeline
-        renderTimeline(data, 100000);
+        initTimeline(data, 100000);
     </script>
 </body>
 </html>
