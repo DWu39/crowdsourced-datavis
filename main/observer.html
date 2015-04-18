@@ -64,20 +64,57 @@
         *           [string] similarity: which sim function to use in switch case
         */
         function computeLinks(users, similarity) {
-            var links = [];
+            // Euclidean distance by default
+            var similarity = typeof similarity === 'undefined' ? 'Euclidean' : similarity;
 
-            for (var u in users) {
-                users[u].actions.forEach(function(action) {
-                    var val = action.affect;
+            switch (similarity) {
+                case 'Euclidean':
+                    return computeEuclidean(users);
+            }
 
-                    links.push({
-                        source: users[u],
-                        target: randomProperty(users),
-                        value: val
+            // function for computing euclidean distance between each pair of actions
+            function computeEuclidean(users) {
+                var links = [],
+                    ids = Object.keys(users);
+
+                // get the list of active users, i.e. have an action
+                var activeUsers = ids.filter(function(id) {
+                    return users[id].actions.length > 0;
+                });
+
+                // compute links
+                ids.forEach(function(id) {
+                    var source = users[id];
+
+                    source.actions.forEach(function(act) {
+
+                        activeUsers.forEach(function(id) {
+                            var target = users[id];
+
+                            target.actions.forEach(function(otherAct) {
+                                var x1 = act.position.x,
+                                    y1 = act.position.y,
+                                    x2 = otherAct.position.x,
+                                    y2 = otherAct.position.y;
+
+                                // calculate link strength
+                                var link = {
+                                    source: source,
+                                    target: target,
+                                    value: euclideanDistance(x1, y1, x2, y2)
+                                }
+                                links.push(link);
+                            });
+                        });
                     });
                 });
+
+                return links;
+            };
+
+            function euclideanDistance(x1, y1, x2, y2) {
+                return Math.sqrt(Math.pow((x1 - x2), 2) + Math.pow((y1 - y2), 2));
             }
-            return links;
         }
 
         // grab random property of object
@@ -121,19 +158,26 @@
                 var users = {},
                     allIds = Object.keys(this.getUsers());
 
-                allIds.forEach(function(id) { if (!users[id]) users[id] = this.getUser(id); });
+                // get a copy of each user
+                for (var i=0; i < allIds.length; i++) {
+                    var id = allIds[i];
+                    if (!users[id]) users[id] = this.copyUser(this.getUser(id));
+                };
 
                 data.forEach(function(d) { users[d.id].addAction(d.action); });
 
-                this.viewModel.links = computeLinks(users);
-
-                console.log(users);
                 this.viewModel.users = users;
+                this.viewModel.links = computeLinks(users, 'Euclidean');
             },
 
             getUser: function(id) { return this.users[id]; },
             getUsers: function() { return this.users; },
-            getNumUsers: function() { return Object.keys(this.users).length; }
+            getNumUsers: function() { return Object.keys(this.users).length; },
+
+            copyUser: function(user) {
+                var copy = new User(user.id, user.location, user.name, user.role);
+                return copy;
+            }
         };
 
         var controller = {
@@ -216,8 +260,6 @@
                           .domain([0, d3.max(matrix.links, function(link) { return link.value; })])
                           .range(['white', 'red']);
 
-                console.log(matrix);
-
                 // draw matrix rows
                 var row = svg.selectAll(".row")
                     .data(matrix.matrix).enter()
@@ -245,7 +287,7 @@
                             .attr("x", function(d) { return x(d.x); })
                             .attr("width", x.rangeBand())
                             .attr("height", x.rangeBand())
-                            .style('fill', function(d) { return z(d.z); })
+                            .style('fill', function(d) { z(d.z); })
                             .on("mouseover", mouseover)
                             .on("mouseout", mouseout);
                 }
@@ -429,9 +471,11 @@
                 time_end = data[data.length - 1].action.date,
                 numSlices = Math.floor(( time_end - time_beg)/defaultLength);
 
-            var slider = d3.select('#timeline').attr('max', numSlices);
+            var slider = d3.select('#timeline')
+                .attr('max', numSlices)
+                .on('input', function() { renderSlice(); });
 
-            slider.on('input', function() {
+            function renderSlice() {
                 var sliceStart = time_beg + (parseInt(slider.node().value) * defaultLength),
                     sliceEnd = sliceStart + defaultLength;
 
@@ -442,7 +486,10 @@
                 // store in view model
                 controller.storeViewModel(slice);
                 controller.renderView();
-            });
+            }
+
+            // show first slice of data
+            renderSlice();
         };
 
 
@@ -452,15 +499,11 @@
         generate.setNumObservations(1);
         var data = generate.generateData(false);
 
-        // store all data in model and all data in view model
+        // store all data in model
         controller.init();
         controller.storeModel(data);
-        controller.storeViewModel(data);
 
-        // render martrix
-        controller.renderView();
-
-        // init timeline
+        // init timeline showing first slice of data
         initTimeline(data, 100000);
     </script>
 </body>
