@@ -73,13 +73,18 @@ function generateData(returnString) {
 
     // generate random actions for each user
     for (var u=0; u<numUsers; u++) {
+        var user = {
+            location: randomLocation(),
+            name: randomName(),
+            role: randomRole()
+        };
         for (var o=0; o<numObservationsPerUser; o++) {
             allData.push({
                 id: u,
                 action: randomAction(),
-                location: randomLocation(),
-                name: randomName(),
-                role: randomRole()
+                location: user.location,
+                name: user.name,
+                role: user.role
             });
         }
     }

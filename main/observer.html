@@ -9,11 +9,47 @@
     <style>
         line { stroke: #fff; }
         * { font-size: 10px; }
+
+        .chart {
+            shape-rendering: crispEdges;
+        }
+
+        .mini text {
+            font: 9px sans-serif;
+        }
+
+        .main text {
+            font: 12px sans-serif;
+        }
+
+        .miniItem0 {
+            fill: darksalmon;
+            stroke-width: 6;
+        }
+
+        .miniItem1 {
+            fill: darkolivegreen;
+            fill-opacity: .7;
+            stroke-width: 6;
+        }
+
+        .miniItem2 {
+            fill: slategray;
+            fill-opacity: .7;
+            stroke-width: 6;
+        }
+
+        .brush .extent {
+            stroke: gray;
+            fill: dodgerblue;
+            fill-opacity: .365;
+        }
     </style>
 </head>
 <body>
     <div id='matrix'></div>
-    <input id='timeline' type='range' min='0' value='0'></input>
+    <!-- <input id='timeline' type='range' min='0' value='0'></input> -->
+    <div id='test_timeline'></div>
 
     <script>
         // ---------- CLASSES/HELPERS ---------- //
@@ -250,7 +286,6 @@
 
             // draw a new matrix
             render: function(matrix) {
-                console.log(matrix);
                 // remove all previous matrix svgs and create new one
                 d3.select('#matrix svg').remove();
 
@@ -504,16 +539,127 @@
 
         // ---------- INITIALIZE ---------- //
         // set up random data
-        generate.setNumUsers(8);
+        generate.setNumUsers(3);
         generate.setNumObservations(5);
         var data = generate.generateData(false);
 
         // store all data in model
         controller.init();
         controller.storeModel(data);
+        controller.storeViewModel(data);
+        controller.renderView();
 
         // init timeline showing first slice of data
-        initTimeline(data, 50000);
+        // initTimeline(data, 50000);
+
+
+        //data
+        var names = data.map(function(d) { return d.name; })
+                        .filter(function(n, i, self) { return self.indexOf(n) === i; })
+                        .sort();
+
+        var lanes = names,
+            laneLength = lanes.length,
+            items = data,
+            timeBegin = 0,
+            timeEnd = generate.getParameters().experimentLength;
+
+        var m = [20, 15, 15, 120], //top right bottom left
+            w = 960 - m[1] - m[3],
+            h = 500 - m[0] - m[2],
+            miniHeight = laneLength * 12 + 50,
+            mainHeight = h - miniHeight - 50;
+
+        //scales
+        var x = d3.scale.linear()
+                .domain([timeBegin, timeEnd])
+                .range([0, w]);
+
+        var x1 = d3.scale.linear()
+                .range([0, w]);
+
+        var y2 = d3.scale.linear()
+                .domain([0, laneLength])
+                .range([0, miniHeight]);
+
+        var chart = d3.select("#test_timeline")
+                    .append("svg")
+                    .attr("width", w + m[1] + m[3])
+                    .attr("height", h + m[0] + m[2])
+                    .attr("class", "chart");
+
+        var mini = chart.append("g")
+            .attr("transform", "translate(" + m[3] + "," + (m[0]) + ")")
+            .attr("width", w)
+            .attr("height", miniHeight)
+            .attr("class", "mini");
+
+        //mini lanes and texts
+        mini.append("g").selectAll(".laneLines")
+            .data(items)
+            .enter().append("line")
+            .attr("x1", m[1])
+            .attr("y1", function(d) {return y2(lanes.indexOf(d.name));})
+            .attr("x2", w)
+            .attr("y2", function(d) {return y2(lanes.indexOf(d.name));})
+            .attr("stroke", "lightgray");
+
+        mini.append("g").selectAll(".laneText")
+            .data(lanes)
+            .enter().append("text")
+            .text(function(d) {return d;})
+            .attr("x", -m[1])
+            .attr("y", function(d, i) {return y2(i + .5);})
+            .attr("dy", ".5ex")
+            .attr("text-anchor", "end")
+            .attr("class", "laneText");
+
+        //mini item rects
+        mini.append("g").selectAll("miniItems")
+            .data(items)
+            .enter().append("rect")
+            .attr("class", function(d) {return "miniItem" + lanes.indexOf(d.name);})
+            .attr("x", function(d) {return x(d.action.date);})
+            .attr("y", function(d) {return y2(lanes.indexOf(d.name) + .5) - 5;})
+            .attr("width", function(d) {return x(25000);})
+            .attr("height", 10);
+
+        //mini labels
+        mini.append("g").selectAll(".miniLabels")
+            .data(items)
+            .enter().append("text")
+            .text(function(d) {return d.action.text.slice(0,5) + "...";})
+            .attr("x", function(d) {return x(d.action.date);})
+            .attr("y", function(d) {return y2(lanes.indexOf(d.name) + .5);})
+            .attr("dy", ".5ex");
+
+        //brush
+        var brush = d3.svg.brush().x(x).on("brushend", display);
+
+        mini.append("g")
+            .attr("class", "x brush")
+            .call(brush)
+            .selectAll("rect")
+            .attr("y", 1)
+            .attr("height", miniHeight - 1);
+
+        display();
+
+        function display() {
+            var rects, labels,
+                minExtent = brush.extent()[0],
+                maxExtent = brush.extent()[1],
+                visItems = items.filter(function(d) {return d.action.date < maxExtent && d.action.date + 20 > minExtent;});
+
+            mini.select(".brush")
+                .call(brush.extent([minExtent, maxExtent]));
+
+            x1.domain([minExtent, maxExtent]);
+
+            console.log(visItems);
+            controller.storeViewModel(visItems);
+            controller.renderView();
+        }
     </script>
 </body>
 </html>
