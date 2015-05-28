@@ -22,19 +22,7 @@
             font: 12px sans-serif;
         }
 
-        .miniItem0 {
-            fill: darksalmon;
-            stroke-width: 6;
-        }
-
-        .miniItem1 {
-            fill: darkolivegreen;
-            fill-opacity: .7;
-            stroke-width: 6;
-        }
-
-        .miniItem2 {
-            fill: slategray;
+        .miniItem {
             fill-opacity: .7;
             stroke-width: 6;
         }
@@ -539,7 +527,7 @@
 
         // ---------- INITIALIZE ---------- //
         // set up random data
-        generate.setNumUsers(3);
+        generate.setNumUsers(5);
         generate.setNumObservations(5);
         var data = generate.generateData(false);
 
@@ -566,7 +554,7 @@
 
         var m = [20, 15, 15, 120], //top right bottom left
             w = 960 - m[1] - m[3],
-            h = 500 - m[0] - m[2],
+            h = 130 - m[0] - m[2],
             miniHeight = laneLength * 12 + 50,
             mainHeight = h - miniHeight - 50;
 
@@ -581,6 +569,8 @@
         var y2 = d3.scale.linear()
                 .domain([0, laneLength])
                 .range([0, miniHeight]);
+
+        var c = d3.scale.category20();
 
         var chart = d3.select("#test_timeline")
                     .append("svg")
@@ -618,11 +608,12 @@
         mini.append("g").selectAll("miniItems")
             .data(items)
             .enter().append("rect")
-            .attr("class", function(d) {return "miniItem" + lanes.indexOf(d.name);})
+            .attr("class", "miniItem")
             .attr("x", function(d) {return x(d.action.date);})
             .attr("y", function(d) {return y2(lanes.indexOf(d.name) + .5) - 5;})
             .attr("width", function(d) {return x(25000);})
-            .attr("height", 10);
+            .attr("height", 10)
+            .style('fill', "#4682B4");
 
         //mini labels
         mini.append("g").selectAll(".miniLabels")
