@@ -339,11 +339,10 @@
                                 return x(d.x) + (x.rangeBand() - z(d.z)*x.rangeBand())/2;
                             })
                             .attr("y", function(d) {
-                                return x(d.x) + (x.rangeBand() - z(d.z)*x.rangeBand())/2;
+                                return (x.rangeBand() - z(d.z)*x.rangeBand())/2;
                             })
                             .attr("width", function(d) { return z(d.z)*x.rangeBand(); })
                             .attr("height", function(d) { return z(d.z)*x.rangeBand(); })
-                            // .style('fill', function(d) { return z(d.z); })
                             .on("mouseover", mouseover)
                             .on("mouseout", mouseout);
                 }
@@ -504,7 +503,6 @@
 
             x1.domain([minExtent, maxExtent]);
 
-            console.log(visItems);
             controller.storeViewModel(visItems);
             controller.renderView();
         }
